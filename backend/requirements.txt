@@ -1,0 +1,6 @@
+# In backend/requirements.txt
+Flask
+Flask-Cors
+yfinance
+pandas
+gunicorn  # This is a production-grade server for Flask
