@@ -1,11 +1,12 @@
 ﻿//
 // 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE:  /frontend/src/App.js
-// It replaces everything that Create React App put there by default.
+// This file has been updated with the "Client-Side Polling" logic for real-time signals.
 //
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Play, Settings, TrendingUp, TrendingDown, DollarSign, Target, AlertTriangle, BarChart3, Activity, RefreshCw } from 'lucide-react';
+import { Toaster, toast } from 'react-hot-toast';
 
 // MODIFIED data fetching function to call the backend API via an environment variable
 const fetchRealMarketData = async (symbol, period = '3mo', interval = '1h') => {
@@ -457,12 +458,59 @@ function TradingDashboard() {
         }
     };
 
+    // This hook runs the main backtest analysis when the config changes
     useEffect(() => {
         const handler = setTimeout(() => {
             runAnalysis();
         }, 1000);
         return () => clearTimeout(handler);
     }, [config]);
+
+    // --- ADDED FOR REAL-TIME POLLING (Step 2 of 2) ---
+    // This hook sets up the client-side polling for new signals
+    useEffect(() => {
+        const checkSignal = async () => {
+            try {
+                const backendUrl = process.env.REACT_APP_API_URL;
+                if (!backendUrl) return; // Silently fail if the URL isn't configured
+
+                const response = await fetch(`${backendUrl}/api/check-signal`);
+                const newSignal = await response.json();
+
+                // If the server found a new, valid signal (not null)
+                if (newSignal && newSignal.signal) {
+                    // Define the style for the notification toast
+                    const toastStyle = {
+                        style: {
+                            background: newSignal.signal === 'LONG' ? '#166534' : '#991B1B', // Dark green for LONG, dark red for SHORT
+                            color: '#F0F9FF', // A light blue/white text color
+                        },
+                        iconTheme: {
+                            primary: '#F0F9FF',
+                            secondary: newSignal.signal === 'LONG' ? '#166534' : '#991B1B',
+                        },
+                    };
+
+                    toast.success(
+                        `New ${newSignal.signal} signal for ${newSignal.symbol} at ${newSignal.price}!`,
+                        toastStyle
+                    );
+                }
+            } catch (error) {
+                // We log the error but don't show it to the user to avoid spamming them
+                console.error("Signal polling failed:", error);
+            }
+        };
+
+        // Call the function immediately when the page loads, then start the interval
+        checkSignal();
+        const intervalId = setInterval(checkSignal, 60000); // Poll every 60 seconds
+
+        // Cleanup function: This is crucial to stop the interval when the user navigates away
+        return () => clearInterval(intervalId);
+
+    }, []); // The empty array ensures this effect runs only once when the component mounts
+    // --- END OF ADDED CODE ---
 
     const chartData = useMemo(() => {
         if (!processedData.length) return [];
@@ -474,6 +522,12 @@ function TradingDashboard() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white font-sans">
+
+            {/* --- ADDED FOR REAL-TIME POLLING (Step 3 of 3) --- */}
+            {/* This component is the container where all toast notifications will appear */}
+            <Toaster position="top-center" reverseOrder={false} />
+            {/* --- END OF ADDED CODE --- */}
+
             <div className="border-b border-gray-700 bg-black/20 backdrop-blur-sm sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-6 py-4">
                     <div className="flex items-center justify-between">
