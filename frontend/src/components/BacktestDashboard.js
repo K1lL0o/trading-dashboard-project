@@ -1,27 +1,32 @@
-// In frontend/src/components/BacktestDashboard.js (Updated with Dynamic Logic)
+// In frontend/src/components/BacktestDashboard.js (Expanded Periods)
 
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Settings, RefreshCw } from 'lucide-react';
 
-// --- ADDED: Data structure to hold the valid periods for each timeframe ---
+// --- UPDATED: Data structure with more granular period options ---
 const validPeriods = {
     '1m': [
+        { value: '1d', label: '1 Day' },
+        { value: '3d', label: '3 Days' },
         { value: '7d', label: '7 Days (Max)' }
     ],
-    '2m': [
-        { value: '60d', label: '60 Days (Max)' }
-    ],
     '5m': [
+        { value: '7d', label: '7 Days' },
+        { value: '30d', label: '30 Days' },
         { value: '60d', label: '60 Days (Max)' }
     ],
     '15m': [
+        { value: '7d', label: '7 Days' },
+        { value: '30d', label: '30 Days' },
         { value: '60d', label: '60 Days (Max)' }
     ],
     '30m': [
+        { value: '7d', label: '7 Days' },
+        { value: '30d', label: '30 Days' },
         { value: '60d', label: '60 Days (Max)' }
     ],
-    '60m': [
+    '60m': [ // Also known as '1h'
         { value: '30d', label: '30 Days' },
         { value: '60d', label: '60 Days' },
         { value: '6mo', label: '6 Months' },
@@ -29,6 +34,7 @@ const validPeriods = {
         { value: '2y', label: '2 Years (Max)' },
     ],
     '1d': [
+        { value: '3mo', label: '3 Months' },
         { value: '6mo', label: '6 Months' },
         { value: '1y', label: '1 Year' },
         { value: '2y', label: '2 Years' },
@@ -40,8 +46,8 @@ const validPeriods = {
 const BacktestDashboard = () => {
     const [config, setConfig] = useState({
         symbol: 'EURUSD=X',
-        timeframe: '60m', // Default to 1 hour
-        period: '6mo', // Default to 6 months
+        timeframe: '60m',
+        period: '6mo',
         strategy: 'momentum',
     });
     const [performance, setPerformance] = useState(null);
@@ -49,22 +55,20 @@ const BacktestDashboard = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // --- ADDED: Effect to ensure the selected period is always valid ---
+    // Effect to ensure the selected period is always valid
     useEffect(() => {
         const availablePeriods = validPeriods[config.timeframe];
         const isCurrentPeriodValid = availablePeriods.some(p => p.value === config.period);
 
-        // If the current period is not valid for the new timeframe, reset it to the first valid option.
         if (!isCurrentPeriodValid) {
             setConfig(prevConfig => ({
                 ...prevConfig,
                 period: availablePeriods[0].value
             }));
         }
-    }, [config.timeframe]); // This hook runs ONLY when the timeframe changes
-    // -------------------------------------------------------------------
+    }, [config.timeframe]);
 
-    // This effect runs the backtest whenever the config is valid and changes
+    // Effect that runs the backtest
     useEffect(() => {
         const runBacktest = async () => {
             setLoading(true);
@@ -81,6 +85,7 @@ const BacktestDashboard = () => {
                 if (!response.ok) throw new Error(data.error || 'Backtest failed');
 
                 setPerformance(data.performance);
+                // The backend now consistently returns a 'time' field
                 setChartData(data.chartData.map(d => ({ ...d, time: new Date(d.time).toLocaleDateString() })));
             } catch (err) {
                 setError(err.message);
@@ -91,7 +96,7 @@ const BacktestDashboard = () => {
 
         const handler = setTimeout(() => {
             runBacktest();
-        }, 500); // Debounce to prevent rapid API calls
+        }, 500);
 
         return () => clearTimeout(handler);
     }, [config]);
@@ -105,13 +110,12 @@ const BacktestDashboard = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
                             <select value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
-                                <optgroup label="Forex"><option value="EURUSD=X">EUR/USD</option><option value="GBPUSD=X">GBP/USD</option></optgroup>
+                                <optgroup label="Forex"><option value="EURUSD=X">EUR/USD</option><option value="GBPUSD=X">GBP/USD</option><option value="USDJPY=X">USD/JPY</option><option value="AUDUSD=X">AUD/USD</option><option value="USDCAD=X">USD/CAD</option></optgroup>
                                 <optgroup label="Crypto"><option value="BTC-USD">BTC/USD</option><option value="ETH-USD">ETH/USD</option></optgroup>
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Timeframe</label>
-                            {/* --- UPDATED TIMEFRAME OPTIONS --- */}
                             <select value={config.timeframe} onChange={(e) => setConfig({ ...config, timeframe: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                                 <option value="1m">1 Minute</option>
                                 <option value="5m">5 Minutes</option>
@@ -120,11 +124,9 @@ const BacktestDashboard = () => {
                                 <option value="60m">1 Hour</option>
                                 <option value="1d">1 Day</option>
                             </select>
-                            {/* ---------------------------------- */}
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Period</label>
-                            {/* --- DYNAMIC PERIOD DROPDOWN --- */}
                             <select value={config.period} onChange={(e) => setConfig({ ...config, period: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                                 {validPeriods[config.timeframe].map(periodOption => (
                                     <option key={periodOption.value} value={periodOption.value}>
@@ -132,7 +134,6 @@ const BacktestDashboard = () => {
                                     </option>
                                 ))}
                             </select>
-                            {/* ------------------------------- */}
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Strategy</label>
