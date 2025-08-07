@@ -1,3 +1,4 @@
 # In backend/requirements.txt
 Flask
 gunicorn
+pandas
