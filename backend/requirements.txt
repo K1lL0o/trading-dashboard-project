@@ -1,4 +1,5 @@
-# In backend/requirements.txt
+setuptools==69.5.1
 Flask
 gunicorn
+requests
 pandas
