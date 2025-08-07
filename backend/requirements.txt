@@ -5,3 +5,4 @@ yfinance>=0.2.37
 pandas
 gunicorn
 requests
+pandas_ta
