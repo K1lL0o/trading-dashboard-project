@@ -1,8 +1,9 @@
 setuptools==69.5.1
 Flask
+Flask-Cors
 gunicorn
 requests
 pandas
 yfinance>=0.2.37
 pandas_ta
-Flask-Cors
+numpy<2.0
