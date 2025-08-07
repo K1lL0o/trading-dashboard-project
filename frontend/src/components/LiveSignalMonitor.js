@@ -1,3 +1,5 @@
+// In frontend/src/components/LiveSignalMonitor.js (Updated)
+
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 import { Settings, Play, StopCircle, Zap, ZapOff } from 'lucide-react';
@@ -68,6 +70,14 @@ const LiveSignalMonitor = () => {
                 <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
                     <h2 className="text-lg font-semibold mb-4 flex items-center"><Settings className="w-5 h-5 mr-2 text-blue-400" />Live Signal Configuration</h2>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        {/* Symbol Selector (from previous update) */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
+                            <select disabled={isRunning} value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                                <optgroup label="Forex"><option value="EURUSD=X">EUR/USD</option><option value="GBPUSD=X">GBP/USD</option><option value="USDJPY=X">USD/JPY</option></optgroup>
+                                <optgroup label="Crypto"><option value="BTC-USD">BTC/USD</option><option value="ETH-USD">ETH/USD</option></optgroup>
+                            </select>
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Strategy</label>
                             <select disabled={isRunning} value={config.strategy} onChange={(e) => setConfig({ ...config, strategy: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
@@ -77,13 +87,19 @@ const LiveSignalMonitor = () => {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Timeframe</label>
+                            {/* --- UPDATED TIMEFRAME OPTIONS --- */}
                             <select disabled={isRunning} value={config.timeframe} onChange={(e) => setConfig({ ...config, timeframe: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                                 <option value="1m">1 Minute</option>
+                                <option value="2m">2 Minutes</option>
                                 <option value="5m">5 Minutes</option>
                                 <option value="15m">15 Minutes</option>
+                                <option value="30m">30 Minutes</option>
+                                <option value="60m">1 Hour</option>
+                                <option value="1d">1 Day</option>
                             </select>
+                            {/* ---------------------------------- */}
                         </div>
-                        <div className="md:col-span-2 flex space-x-4">
+                        <div className="md:col-span-1 flex space-x-4">
                             {!isRunning ? (
                                 <button onClick={handleStart} className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium">
                                     <Play /><span>Start Monitoring</span>
