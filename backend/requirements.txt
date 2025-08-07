@@ -1,9 +1,3 @@
 # In backend/requirements.txt
-setuptools==69.5.1
 Flask
-Flask-Cors
-yfinance>=0.2.37
-pandas
 gunicorn
-requests
-pandas_ta
