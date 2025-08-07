@@ -5,3 +5,4 @@ requests
 pandas
 yfinance>=0.2.37
 pandas_ta
+Flask-Cors
