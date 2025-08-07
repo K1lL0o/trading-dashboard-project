@@ -1,4 +1,4 @@
-﻿# In backend/app.py (Version 4.0 - Advanced Backtesting Engine)
+﻿# In backend/app.py (Version 4.1 - Robust Backtesting Engine)
 
 import os
 import requests
@@ -12,10 +12,10 @@ import numpy as np
 app = Flask(__name__)
 CORS(app)
 
-# --- GLOBAL STATE & DISCORD (Unchanged) ---
-# ... (All the live monitoring and Discord code remains the same)
+# (Global state, Discord notifications, and data cleaning functions are unchanged)
+# ...
 
-# --- NEW: ADVANCED BACKTESTING ENGINE ---
+# --- NEW: ADVANCED BACKTESTING ENGINE (WITH BUG FIXES) ---
 def run_backtest_simulation(df, initial_capital, risk_percent, slippage_pips, commission_per_trade):
     trades = []
     capital = initial_capital
@@ -23,106 +23,77 @@ def run_backtest_simulation(df, initial_capital, risk_percent, slippage_pips, co
     max_drawdown = 0.0
     position = None
     
-    # Convert slippage from pips to price
     slippage = slippage_pips * 0.0001
-
-    for i in range(1, len(df)):
+    
+    # --- THIS IS THE FIX ---
+    # Start the simulation only after the longest indicator (EMA_50) has had time to generate valid data.
+    warmup_period = 50 
+    for i in range(warmup_period, len(df)):
+    # -----------------------
         current = df.iloc[i]
         prev = df.iloc[i-1]
 
-        # --- EXIT LOGIC ---
+        # --- EXIT LOGIC --- (Unchanged)
         if position:
             exit_reason = None
             exit_price = 0.0
             if position['type'] == 'LONG':
-                if current['low'] <= position['stop_loss']:
-                    exit_reason = "Stop Loss"
-                    exit_price = position['stop_loss'] - slippage
-                elif current['high'] >= position['take_profit']:
-                    exit_reason = "Take Profit"
-                    exit_price = position['take_profit'] - slippage
+                if current['Low'] <= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss'] - slippage
+                elif current['High'] >= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit'] - slippage
             elif position['type'] == 'SHORT':
-                if current['high'] >= position['stop_loss']:
-                    exit_reason = "Stop Loss"
-                    exit_price = position['stop_loss'] + slippage
-                elif current['low'] <= position['take_profit']:
-                    exit_reason = "Take Profit"
-                    exit_price = position['take_profit'] + slippage
+                if current['High'] >= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss'] + slippage
+                elif current['Low'] <= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit'] + slippage
             
-            # Close position at the end of the data
             if i == len(df) - 1 and not exit_reason:
-                exit_reason = "End of Period"
-                exit_price = current['close']
+                exit_reason, exit_price = "End of Period", current['Close']
 
             if exit_reason:
-                # Calculate P&L
                 pnl = (exit_price - position['entry_price']) if position['type'] == 'LONG' else (position['entry_price'] - exit_price)
-                pnl -= commission_per_trade # Apply commission
-                
+                pnl -= commission_per_trade
                 capital += pnl
-                
-                # Update drawdown
                 peak_capital = max(peak_capital, capital)
                 drawdown = (peak_capital - capital) / peak_capital
                 max_drawdown = max(max_drawdown, drawdown)
-                
                 position['exit_price'] = exit_price
                 position['pnl'] = pnl
                 position['exit_reason'] = exit_reason
                 trades.append(position)
                 position = None
 
-        # --- ENTRY LOGIC ---
+        # --- ENTRY LOGIC (with safety check) ---
         if not position and prev['signal'] != 'STAY_OUT' and prev['signal'] != current['signal']:
-            entry_price = current['open'] + (slippage if prev['signal'] == 'LONG' else -slippage)
+            atr = prev['BBU_20_2.0'] - prev['BBL_20_2.0']
             
-            # Use ATR from Bollinger Bands for SL/TP placement
-            atr = (prev['BBU_20_2.0'] - prev['BBL_20_2.0'])
+            # Additional safety check to prevent trading if indicators are still NaN
+            if pd.isna(atr) or atr == 0:
+                continue
+
+            entry_price = current['Open'] + (slippage if prev['signal'] == 'LONG' else -slippage)
             
             if prev['signal'] == 'LONG':
                 stop_loss = entry_price - atr
-                take_profit = entry_price + (atr * 1.5) # Example 1.5 Reward/Risk
+                take_profit = entry_price + (atr * 1.5)
             else: # SHORT
                 stop_loss = entry_price + atr
                 take_profit = entry_price - (atr * 1.5)
 
-            position = {
-                'entry_date': current['time'],
-                'type': prev['signal'],
-                'entry_price': entry_price,
-                'stop_loss': stop_loss,
-                'take_profit': take_profit
-            }
+            position = { 'entry_date': current['time'], 'type': prev['signal'], 'entry_price': entry_price, 'stop_loss': stop_loss, 'take_profit': take_profit }
 
-    # --- FINAL METRICS CALCULATION ---
-    if not trades:
-        return {"error": "No trades were executed during this backtest."}
-
+    # --- FINAL METRICS CALCULATION --- (Unchanged)
+    if not trades: return {"error": "No trades were executed during this backtest."}
+    # ... (rest of this function is the same)
+    
     total_return_percent = ((capital - initial_capital) / initial_capital) * 100
     winning_trades = [t for t in trades if t['pnl'] > 0]
     losing_trades = [t for t in trades if t['pnl'] <= 0]
     win_rate = (len(winning_trades) / len(trades)) * 100 if trades else 0
-    
     total_profit = sum(t['pnl'] for t in winning_trades)
     total_loss = abs(sum(t['pnl'] for t in losing_trades))
-    profit_factor = total_profit / total_loss if total_loss > 0 else 999 # Avoid division by zero
-    
+    profit_factor = total_profit / total_loss if total_loss > 0 else 999
     avg_win = total_profit / len(winning_trades) if winning_trades else 0
     avg_loss = total_loss / len(losing_trades) if losing_trades else 0
+    return { "trades": trades, "performance": { "totalReturn": round(total_return_percent, 2), "winRate": round(win_rate, 2), "profitFactor": round(profit_factor, 2), "totalTrades": len(trades), "avgWin": round(avg_win, 2), "avgLoss": round(avg_loss, 2), "maxDrawdown": round(max_drawdown * 100, 2), "finalCapital": round(capital, 2) } }
 
-    return {
-        "trades": trades,
-        "performance": {
-            "totalReturn": round(total_return_percent, 2),
-            "winRate": round(win_rate, 2),
-            "profitFactor": round(profit_factor, 2),
-            "totalTrades": len(trades),
-            "avgWin": round(avg_win, 2),
-            "avgLoss": round(avg_loss, 2),
-            "maxDrawdown": round(max_drawdown * 100, 2),
-            "finalCapital": round(capital, 2)
-        }
-    }
 
 # --- API ENDPOINTS ---
 @app.route('/api/backtest', methods=['POST'])

@@ -1,26 +1,47 @@
-// In frontend/src/components/BacktestDashboard.js (Final Version)
+﻿//
+// 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE: /frontend/src/components/BacktestDashboard.js
+// This version restores the UI layout and includes all advanced backtesting features.
+//
 
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Settings, RefreshCw, TrendingUp, Target, DollarSign, BarChart3, TrendingDown, AlertTriangle } from 'lucide-react';
 
-const validPeriods = { /* ... (this data structure remains unchanged) ... */ };
+const validPeriods = {
+    '1m': [{ value: '1d', label: '1 Day' }, { value: '3d', label: '3 Days' }, { value: '7d', label: '7 Days (Max)' }],
+    '5m': [{ value: '7d', label: '7 Days' }, { value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days (Max)' }],
+    '15m': [{ value: '7d', label: '7 Days' }, { value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days (Max)' }],
+    '30m': [{ value: '7d', label: '7 Days' }, { value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days (Max)' }],
+    '60m': [{ value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days' }, { value: '6mo', label: '6 Months' }, { value: '1y', label: '1 Year' }, { value: '2y', label: '2 Years (Max)' },],
+    '1d': [{ value: '3mo', label: '3 Months' }, { value: '6mo', label: '6 Months' }, { value: '1y', label: '1 Year' }, { value: '2y', label: '2 Years' }, { value: '5y', label: '5 Years (Max)' }]
+};
 
 const BacktestDashboard = () => {
     const [config, setConfig] = useState({
-        symbol: 'EURUSD=X', timeframe: '60m', period: '6mo', strategy: 'momentum',
-        slippage: 1.5, // Default slippage in pips
-        commission: 4.00 // Default commission in $
+        symbol: 'EURUSD=X',
+        timeframe: '60m',
+        period: '6mo',
+        strategy: 'momentum',
+        slippage: 1.5,
+        commission: 4.00
     });
     const [performance, setPerformance] = useState(null);
     const [trades, setTrades] = useState([]);
     const [chartData, setChartData] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     // Effect to ensure the selected period is always valid
     useEffect(() => {
-        // ... (this useEffect hook remains unchanged)
+        const availablePeriods = validPeriods[config.timeframe];
+        const isCurrentPeriodValid = availablePeriods.some(p => p.value === config.period);
+
+        if (!isCurrentPeriodValid) {
+            setConfig(prevConfig => ({
+                ...prevConfig,
+                period: availablePeriods[0].value
+            }));
+        }
     }, [config.timeframe]);
 
     // Effect that runs the backtest
@@ -50,25 +71,81 @@ const BacktestDashboard = () => {
                 setLoading(false);
             }
         };
-        const handler = setTimeout(() => { runBacktest(); }, 500);
+
+        const handler = setTimeout(() => {
+            runBacktest();
+        }, 500);
+
         return () => clearTimeout(handler);
     }, [config]);
 
     return (
         <div>
-            {/* --- CONFIGURATION SECTION (WITH NEW INPUTS) --- */}
+            {/* --- RESTORED: MAIN CONFIGURATION SECTION (4 columns) --- */}
             <section className="mb-8">
                 <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
                     <h2 className="text-lg font-semibold mb-4 flex items-center"><Settings className="w-5 h-5 mr-2 text-blue-400" />Backtest Configuration</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                        {/* ... (Symbol, Timeframe, Period, Strategy dropdowns are unchanged) ... */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
+                            <select value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                                <optgroup label="Forex">
+                                    <option value="EURUSD=X">EUR/USD</option>
+                                    <option value="GBPUSD=X">GBP/USD</option>
+                                    <option value="USDJPY=X">USD/JPY</option>
+                                    <option value="AUDUSD=X">AUD/USD</option>
+                                    <option value="USDCAD=X">USD/CAD</option>
+                                </optgroup>
+                                <optgroup label="Crypto">
+                                    <option value="BTC-USD">BTC/USD</option>
+                                    <option value="ETH-USD">ETH/USD</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Timeframe</label>
+                            <select value={config.timeframe} onChange={(e) => setConfig({ ...config, timeframe: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                                <option value="1m">1 Minute</option>
+                                <option value="5m">5 Minutes</option>
+                                <option value="15m">15 Minutes</option>
+                                <option value="30m">30 Minutes</option>
+                                <option value="60m">1 Hour</option>
+                                <option value="1d">1 Day</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Period</label>
+                            <select value={config.period} onChange={(e) => setConfig({ ...config, period: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                                {validPeriods[config.timeframe].map(periodOption => (
+                                    <option key={periodOption.value} value={periodOption.value}>
+                                        {periodOption.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Strategy</label>
+                            <select value={config.strategy} onChange={(e) => setConfig({ ...config, strategy: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                                <option value="momentum">Momentum</option>
+                                <option value="scalping">Scalping</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* --- NEW: TRADE PARAMETERS SECTION --- */}
+            <section className="mb-8">
+                <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
+                    <h2 className="text-lg font-semibold mb-4 flex items-center">Trade Parameters</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Slippage (pips)</label>
-                            <input type="number" value={config.slippage} onChange={(e) => setConfig({ ...config, slippage: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                            <input type="number" step="0.1" value={config.slippage} onChange={(e) => setConfig({ ...config, slippage: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Commission ($)</label>
-                            <input type="number" value={config.commission} onChange={(e) => setConfig({ ...config, commission: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                            <input type="number" step="0.5" value={config.commission} onChange={(e) => setConfig({ ...config, commission: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
                         </div>
                     </div>
                 </div>
@@ -77,7 +154,6 @@ const BacktestDashboard = () => {
             {(loading) && <div className="text-center py-8"><RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-400" /></div>}
             {error && <div className="text-center py-8 text-red-400">Error: {error}</div>}
 
-            {/* --- NEW: PERFORMANCE METRICS SECTION --- */}
             {performance && !loading && (
                 <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
                     <StatCard icon={TrendingUp} label="Total Return" value={`${performance.totalReturn}%`} isPositive={performance.totalReturn > 0} />
@@ -90,14 +166,25 @@ const BacktestDashboard = () => {
                 </section>
             )}
 
-            {/* --- Chart Section (Unchanged) --- */}
             {chartData.length > 0 && !loading && (
                 <section className="grid grid-cols-1 mb-8">
-                    {/* ... (The chart JSX is unchanged) ... */}
+                    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6 min-h-[400px]">
+                        <h3 className="text-lg font-semibold mb-4 text-blue-400">Backtest Results</h3>
+                        <ResponsiveContainer width="100%" height={320}>
+                            <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis dataKey="time" stroke="#9CA3AF" fontSize={12} />
+                                <YAxis stroke="#9CA3AF" fontSize={12} domain={['auto', 'auto']} allowDataOverflow={true} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }} />
+                                <Legend />
+                                <Line dataKey="Close" stroke="#3B82F6" strokeWidth={2} dot={false} name="Price" />
+                                <Line dataKey="EMA_20" stroke="#F59E0B" strokeWidth={1} dot={false} name="EMA 20" />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
                 </section>
             )}
 
-            {/* --- NEW: TRADES TABLE SECTION --- */}
             {trades.length > 0 && !loading && (
                 <section className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
                     <h3 className="text-lg font-semibold mb-4 text-cyan-400">Trade Log</h3>
@@ -119,7 +206,7 @@ const BacktestDashboard = () => {
                                         <td className="py-3 px-4 text-sm">{new Date(trade.entry_date).toLocaleString()}</td>
                                         <td className="py-3 px-4"><span className={`px-2 py-1 rounded text-xs font-medium ${trade.type === 'LONG' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>{trade.type}</span></td>
                                         <td className="py-3 px-4 text-sm">{trade.entry_price.toFixed(5)}</td>
-                                        <td className="py-3 px-4 text-sm">{trade.exit_price.toFixed(5)}</td>
+                                        <td className="py-3 px-4 text-sm">{trade.exit_price ? trade.exit_price.toFixed(5) : 'N/A'}</td>
                                         <td className={`py-3 px-4 text-right font-medium ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>${trade.pnl.toFixed(2)}</td>
                                         <td className="py-3 px-4 text-xs text-gray-400">{trade.exit_reason}</td>
                                     </tr>
