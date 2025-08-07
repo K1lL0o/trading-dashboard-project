@@ -1,4 +1,6 @@
-﻿import os
+﻿# In backend/app.py
+
+import os
 import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -56,7 +58,6 @@ def send_discord_notification(trade_details, reason, strategy_name):
 
 # --- CORE TRADING LOGIC (MOVED TO BACKEND) ---
 def generate_signals(df, strategy_name):
-    # Use pandas_ta to calculate all indicators at once
     df.ta.ema(length=5, append=True)
     df.ta.ema(length=10, append=True)
     df.ta.ema(length=20, append=True)
@@ -68,57 +69,18 @@ def generate_signals(df, strategy_name):
     
     df['signal'] = 'STAY_OUT'
     
-    # Example for one strategy (add more cases for others)
     if strategy_name == 'momentum':
         long_conditions = (df['RSI_14'] > 60) & (df['EMA_5'] > df['EMA_20']) & (df['EMA_20'] > df['EMA_50'])
         short_conditions = (df['RSI_14'] < 40) & (df['EMA_5'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50'])
         df.loc[long_conditions, 'signal'] = 'LONG'
         df.loc[short_conditions, 'signal'] = 'SHORT'
     
-    # Add logic for 'scalping', 'mean_reversion', 'breakout' here...
-
     return df
-
-def run_backtest_logic(df, capital, risk_percent):
-    # This is a simplified backtest runner, similar to the frontend version
-    trades = []
-    position = None
-    
-    for i in range(1, len(df)):
-        current = df.iloc[i]
-        prev_signal = df.iloc[i-1]['signal']
-        
-        if not position:
-            if prev_signal == 'LONG' or prev_signal == 'SHORT':
-                entry_price = current['open']
-                atr = df['BBL_20_2.0'].iloc[i] # Simple ATR approximation
-                stop_loss = entry_price - atr if prev_signal == 'LONG' else entry_price + atr
-                take_profit = entry_price + (atr * 2) if prev_signal == 'LONG' else entry_price - (atr * 2)
-                position = {'type': prev_signal, 'entry': entry_price, 'sl': stop_loss, 'tp': take_profit, 'entry_date': current.name}
-
-        if position:
-            exit_reason = None
-            if position['type'] == 'LONG':
-                if current['high'] >= position['tp']: exit_reason = 'Take Profit'
-                elif current['low'] <= position['sl']: exit_reason = 'Stop Loss'
-            elif position['type'] == 'SHORT':
-                if current['low'] <= position['tp']: exit_reason = 'Take Profit'
-                elif current['high'] >= position['sl']: exit_reason = 'Stop Loss'
-
-            if exit_reason or i == len(df) - 1:
-                exit_price = position['tp'] if exit_reason == 'Take Profit' else position['sl'] if exit_reason == 'Stop Loss' else current['close']
-                pnl = (exit_price - position['entry']) if position['type'] == 'LONG' else (position['entry'] - exit_price)
-                trades.append({'entry_date': position['entry_date'], 'exit_date': current.name, 'type': position['type'], 'pnl': pnl})
-                capital += pnl
-                position = None
-    
-    return {'final_capital': capital, 'trades': trades}
 
 # --- NEW LIVE MONITORING LOGIC ---
 def check_live_trade():
     global current_trade, live_monitor_config
-    if not live_monitor_config["is_running"]:
-        return
+    if not live_monitor_config["is_running"]: return
 
     cfg = live_monitor_config["config"]
     try:
@@ -145,7 +107,7 @@ def check_live_trade():
 
         # ENTRY LOGIC
         if latest['signal'] != 'STAY_OUT' and prev['signal'] == 'STAY_OUT':
-            pip_value = (latest['BBU_20_2.0'] - latest['BBL_20_2.0']) # ATR from Bollinger Bands
+            pip_value = (latest['BBU_20_2.0'] - latest['BBL_20_2.0'])
             current_trade = {
                 "symbol": cfg['symbol'], "type": latest['signal'], "timeframe": cfg['timeframe'],
                 "entry_price": latest['close'],
@@ -170,31 +132,27 @@ def start_monitor():
 def stop_monitor():
     global live_monitor_config, current_trade
     live_monitor_config = {"is_running": False, "config": None}
-    current_trade = None # Clear any open trades when stopping
+    current_trade = None
     print("Stopped live monitoring.")
     return jsonify({"status": "Live monitoring stopped"})
 
 @app.route('/api/check-signal')
 def check_signal_route():
-    if live_monitor_config["is_running"]:
-        check_live_trade()
+    if live_monitor_config["is_running"]: check_live_trade()
     return jsonify({"status": "checked"})
 
 @app.route('/api/backtest', methods=['POST'])
 def backtest_route():
+    # ... (This function remains unchanged)
     config = request.json
     try:
         data = yf.download(tickers=config['symbol'], period=config['period'], interval=config['timeframe'], progress=False)
-        if data.empty:
-            return jsonify({"error": "No data found for the selected backtest parameters."}), 404
+        if data.empty: return jsonify({"error": "No data found for the selected backtest parameters."}), 404
         
         signals_df = generate_signals(data, config['strategy'])
-        # Run backtest logic (this part needs to be fully implemented)
-        # For now, we'll just return the raw data and signals
         signals_df.reset_index(inplace=True)
         chart_data = signals_df.tail(200).to_dict('records')
         
-        # Replace with a call to a full backtest function later
         performance = {"totalReturn": 189.16, "winRate": 42.9, "profitFactor": 1.83, "totalTrades": 112} # Placeholder
 
         return jsonify({"performance": performance, "chartData": chart_data})
@@ -204,3 +162,11 @@ def backtest_route():
 @app.route('/')
 def index():
     return "<h1>Trading API v2 with Backtesting and Live Monitoring</h1>"
+
+# --- ADD THIS BLOCK TO THE END OF THE FILE ---
+if __name__ == '__main__':
+    # Render provides a PORT environment variable. Gunicorn automatically uses it.
+    # When running with `python app.py`, we need to read it manually.
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+# ----------------------------------------------
