@@ -1,4 +1,9 @@
-﻿import { useState, useEffect } from 'react';
+﻿//
+// 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE: /frontend/src/components/BacktestDashboard.js
+// This is the complete and final version with the upgraded UI and full backtesting logic.
+//
+
+import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Settings, RefreshCw, TrendingUp, Target, DollarSign, BarChart3, TrendingDown, AlertTriangle } from 'lucide-react';
 
@@ -13,8 +18,18 @@ const validPeriods = {
 
 const BacktestDashboard = () => {
     const [config, setConfig] = useState({
-        symbol: 'EURUSD=X', timeframe: '60m', period: '6mo', strategy: 'momentum',
-        slippage: 1.5, commission: 4.00
+        symbol: 'EURUSD=X',
+        timeframe: '60m',
+        period: '6mo',
+        strategy: 'momentum',
+        // Detailed backtest parameters matching the original logic
+        initialCapital: 10000,
+        riskPerTrade: 2.0,
+        maxTradesPerDay: 5,
+        atrMultiplier: 1.0,
+        targetMultiplier: 2.5,
+        slippage: 1.5,
+        commission: 4.00
     });
     const [performance, setPerformance] = useState(null);
     const [trades, setTrades] = useState([]);
@@ -22,14 +37,16 @@ const BacktestDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // Effect to ensure the selected period is always valid
     useEffect(() => {
         const availablePeriods = validPeriods[config.timeframe];
         const isCurrentPeriodValid = availablePeriods.some(p => p.value === config.period);
         if (!isCurrentPeriodValid) {
             setConfig(prevConfig => ({ ...prevConfig, period: availablePeriods[0].value }));
         }
-    }, [config.timeframe, config.period]);
+    }, [config.timeframe]);
 
+    // Effect that runs the backtest
     useEffect(() => {
         const runBacktest = async () => {
             setLoading(true);
@@ -38,14 +55,11 @@ const BacktestDashboard = () => {
             setTrades([]);
             setChartData([]);
             try {
-                // --- THIS IS THE FINAL FIX ---
-                // We now call the full URL of the Render server, just like the live monitor does.
                 const backendUrl = process.env.REACT_APP_RENDER_WORKER_URL;
                 if (!backendUrl) {
                     throw new Error("Render worker URL is not configured in environment variables.");
                 }
                 const response = await fetch(`${backendUrl}/api/backtest`, {
-                    // ---------------------------
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config),
@@ -74,7 +88,7 @@ const BacktestDashboard = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
-                            <select value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className="w-full ...">
+                            <select value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                                 <optgroup label="Forex">
                                     <option value="EURUSD=X">EUR/USD</option>
                                     <option value="GBPUSD=X">GBP/USD</option>
@@ -114,14 +128,34 @@ const BacktestDashboard = () => {
             <section className="mb-8">
                 <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
                     <h2 className="text-lg font-semibold mb-4 flex items-center">Trade Parameters</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Capital ($)</label>
+                            <input type="number" step="1000" value={config.initialCapital} onChange={(e) => setConfig({ ...config, initialCapital: Number(e.target.value) })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Risk / Trade (%)</label>
+                            <input type="number" step="0.5" value={config.riskPerTrade} onChange={(e) => setConfig({ ...config, riskPerTrade: Number(e.target.value) })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Max Trades / Day</label>
+                            <input type="number" step="1" value={config.maxTradesPerDay} onChange={(e) => setConfig({ ...config, maxTradesPerDay: Number(e.target.value) })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">ATR Multiplier (SL)</label>
+                            <input type="number" step="0.1" value={config.atrMultiplier} onChange={(e) => setConfig({ ...config, atrMultiplier: Number(e.target.value) })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Target Multiplier (TP)</label>
+                            <input type="number" step="0.1" value={config.targetMultiplier} onChange={(e) => setConfig({ ...config, targetMultiplier: Number(e.target.value) })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Slippage (pips)</label>
-                            <input type="number" step="0.1" value={config.slippage} onChange={(e) => setConfig({ ...config, slippage: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                            <input type="number" step="0.1" value={config.slippage} onChange={(e) => setConfig({ ...config, slippage: Number(e.target.value) })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Commission ($)</label>
-                            <input type="number" step="0.5" value={config.commission} onChange={(e) => setConfig({ ...config, commission: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                            <input type="number" step="0.5" value={config.commission} onChange={(e) => setConfig({ ...config, commission: Number(e.target.value) })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white" />
                         </div>
                     </div>
                 </div>

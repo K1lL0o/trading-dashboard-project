@@ -49,7 +49,7 @@ def clean_yfinance_data(df):
 
 # --- CORE TRADING LOGIC ---
 def generate_signals(df, strategy_name):
-    # Calculate a comprehensive set of indicators needed for all strategies
+    # Calculate a comprehensive set of indicators
     df.ta.ema(length=5, append=True)
     df.ta.ema(length=10, append=True)
     df.ta.ema(length=20, append=True)
@@ -57,62 +57,67 @@ def generate_signals(df, strategy_name):
     df.ta.rsi(length=7, append=True)
     df.ta.rsi(length=14, append=True)
     df.ta.bbands(length=20, append=True)
-    # Add a fast MACD for the scalping strategy
-    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('MACD_5_12_3', 'MACDh_5_12_3', 'MACDs_5_12_3'))
+    df.ta.macd(fast=12, slow=26, signal=9, append=True) # Standard MACD
+    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('MACD_5_12_3', 'MACDh_5_12_3', 'MACDs_5_12_3')) # Fast MACD
     
-    # Default signal is to do nothing
     df['signal'] = 'STAY_OUT'
 
-    # --- Momentum Strategy (Upgraded) ---
     if strategy_name == 'momentum':
-        # Conditions for a strong uptrend
         long_conditions = (
             (df['RSI_14'] > 60) &
             (df['RSI_7'] > 65) &
             (df['EMA_5'] > df['EMA_10']) &
             (df['EMA_10'] > df['EMA_20']) &
-            (df['EMA_20'] > df['EMA_50'])
+            (df['EMA_20'] > df['EMA_50']) &
+            (df['MACD_12_26_9'] > df['MACDs_12_26_9'])
         )
-        # Conditions for a strong downtrend
         short_conditions = (
             (df['RSI_14'] < 40) &
             (df['RSI_7'] < 35) &
             (df['EMA_5'] < df['EMA_10']) &
             (df['EMA_10'] < df['EMA_20']) &
-            (df['EMA_20'] < df['EMA_50'])
+            (df['EMA_20'] < df['EMA_50']) &
+            (df['MACD_12_26_9'] < df['MACDs_12_26_9'])
         )
         df.loc[long_conditions, 'signal'] = 'LONG'
         df.loc[short_conditions, 'signal'] = 'SHORT'
         
-    # --- Scalping Strategy (New) ---
     elif strategy_name == 'scalping':
-        # Calculate scores for long and short signals
         long_score = pd.Series(0, index=df.index)
         short_score = pd.Series(0, index=df.index)
-
-        # Condition 1: Fast MACD Crossover (Score: +2)
-        long_score += (df['MACD_5_12_3'] > df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) <= df['MACDs_5_12_3'].shift(1)) * 2
-        short_score += (df['MACD_5_12_3'] < df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) >= df['MACDs_5_12_3'].shift(1)) * 2
-
-        # Condition 2: RSI (Score: +1)
-        long_score += (df['RSI_7'] < 35) * 1
-        short_score += (df['RSI_7'] > 65) * 1
-
-        # Condition 3: EMA Alignment (Score: +1)
-        long_score += (df['EMA_5'] > df['EMA_10']) & (df['EMA_10'] > df['EMA_20']) * 1
-        short_score += (df['EMA_5'] < df['EMA_10']) & (df['EMA_10'] < df['EMA_20']) * 1
         
-        # Final Signal based on score
+        long_score += pd.Series((df['MACD_5_12_3'] > df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) <= df['MACDs_5_12_3'].shift(1))).astype(int) * 2
+        short_score += pd.Series((df['MACD_5_12_3'] < df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) >= df['MACDs_5_12_3'].shift(1))).astype(int) * 2
+        
+        long_score += pd.Series(df['RSI_7'] < 35).astype(int)
+        short_score += pd.Series(df['RSI_7'] > 65).astype(int)
+
+        long_score += pd.Series((df['EMA_5'] > df['EMA_10']) & (df['EMA_10'] > df['EMA_20'])).astype(int)
+        short_score += pd.Series((df['EMA_5'] < df['EMA_10']) & (df['EMA_10'] < df['EMA_20'])).astype(int)
+        
         df.loc[long_score >= 3, 'signal'] = 'LONG'
         df.loc[short_score >= 3, 'signal'] = 'SHORT'
 
     return df
 
-def run_backtest_simulation(df, initial_capital, slippage_pips, commission_per_trade):
-    # The full, correct backtesting engine code is here
-    trades, capital, peak_capital, max_drawdown, position, slippage, warmup_period = [], initial_capital, initial_capital, 0.0, None, slippage_pips * 0.0001, 50
+def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_day, atr_multiplier, target_multiplier, slippage_pips, commission_per_trade):
+    trades = []
+    capital = initial_capital
+    position = None
+    daily_trade_count = {}
+    slippage = slippage_pips * 0.0001
+    warmup_period = 50
+
     for i in range(warmup_period, len(df)):
-        current, prev = df.iloc[i], df.iloc[i-1]
+        current = df.iloc[i]
+        prev = df.iloc[i-1]
+        
+        # Reset daily trade count
+        current_date = current['time'].date()
+        if current_date not in daily_trade_count:
+            daily_trade_count[current_date] = 0
+
+        # EXIT LOGIC
         if position:
             exit_reason, exit_price = None, 0.0
             if position['type'] == 'LONG':
@@ -121,20 +126,38 @@ def run_backtest_simulation(df, initial_capital, slippage_pips, commission_per_t
             elif position['type'] == 'SHORT':
                 if current['High'] >= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss'] + slippage
                 elif current['Low'] <= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit'] + slippage
-            if i == len(df) - 1 and not exit_reason: exit_reason, exit_price = "End of Period", current['Close']
+
+            if i == len(df) - 1 and not exit_reason:
+                exit_reason, exit_price = "End of Period", current['Close']
+
             if exit_reason:
-                pnl = (exit_price - position['entry_price']) if position['type'] == 'LONG' else (position['entry_price'] - exit_price)
-                pnl -= commission_per_trade; capital += pnl; peak_capital = max(peak_capital, capital)
-                drawdown = (peak_capital - capital) / peak_capital if peak_capital > 0 else 0
-                max_drawdown = max(max_drawdown, drawdown)
+                pnl = (exit_price - position['entry_price']) * position['position_size'] if position['type'] == 'LONG' else (position['entry_price'] - exit_price) * position['position_size']
+                pnl -= commission_per_trade; capital += pnl
                 position.update({'exit_price': exit_price, 'pnl': pnl, 'exit_reason': exit_reason}); trades.append(position); position = None
-        if not position and prev['signal'] != 'STAY_OUT' and prev['signal'] != current['signal']:
-            atr = prev['BBU_20_2.0'] - prev['BBL_20_2.0']
+
+        # ENTRY LOGIC
+        if not position and current['signal'] != 'STAY_OUT' and prev['signal'] == 'STAY_OUT':
+            if daily_trade_count[current_date] >= max_trades_per_day: continue
+
+            atr = (current['BBU_20_2.0'] - current['BBL_20_2.0']) * 0.7 # Approximation of ATR
             if pd.isna(atr) or atr == 0: continue
-            entry_price = current['Open'] + (slippage if prev['signal'] == 'LONG' else -slippage)
-            stop_loss = entry_price - atr if prev['signal'] == 'LONG' else entry_price + atr
-            take_profit = entry_price + (atr * 1.5) if prev['signal'] == 'LONG' else entry_price - (atr * 1.5)
-            position = {'entry_date': current['time'], 'type': prev['signal'], 'entry_price': entry_price, 'stop_loss': stop_loss, 'take_profit': take_profit}
+
+            entry_price = current['Open'] + (slippage if current['signal'] == 'LONG' else -slippage)
+            
+            if current['signal'] == 'LONG':
+                stop_loss = entry_price - (atr * atr_multiplier)
+                take_profit = entry_price + (atr * target_multiplier)
+            else: # SHORT
+                stop_loss = entry_price + (atr * atr_multiplier)
+                take_profit = entry_price - (atr * target_multiplier)
+
+            risk_amount = capital * (risk_per_trade / 100)
+            price_diff = abs(entry_price - stop_loss)
+            position_size = risk_amount / price_diff if price_diff > 0 else 0
+
+            if position_size > 0:
+                daily_trade_count[current_date] += 1
+                position = {'entry_date': current['time'], 'type': current['signal'], 'entry_price': entry_price, 'stop_loss': stop_loss, 'take_profit': take_profit, 'position_size': position_size}
     if not trades: return {"error": "No trades were executed."}
     total_return = ((capital - initial_capital) / initial_capital) * 100
     wins = [t for t in trades if t['pnl'] > 0]; losses = [t for t in trades if t['pnl'] <= 0]
@@ -221,7 +244,16 @@ def backtest_route():
         signals_df = generate_signals(clean_df, config['strategy'])
         date_col = 'Datetime' if 'Datetime' in signals_df.columns else 'Date'
         signals_df.rename(columns={date_col: 'time'}, inplace=True)
-        results = run_backtest_simulation(signals_df, 10000, float(config.get('slippage', 1.5)), float(config.get('commission', 4.0)))
+        results = run_backtest_simulation(
+            signals_df, 
+            initial_capital=float(config.get('initialCapital', 10000)),
+            risk_per_trade=float(config.get('riskPerTrade', 2.0)),
+            max_trades_per_day=int(config.get('maxTradesPerDay', 5)),
+            atr_multiplier=float(config.get('atrMultiplier', 1.0)),
+            target_multiplier=float(config.get('targetMultiplier', 2.5)),
+            slippage_pips=float(config.get('slippage', 1.5)),
+            commission_per_trade=float(config.get('commission', 4.0))
+        )
         if "error" in results: return jsonify(results), 400
         chart_data = signals_df.tail(300).to_dict('records')
         return jsonify({"performance": results['performance'], "trades": results['trades'], "chartData": chart_data}), 200
