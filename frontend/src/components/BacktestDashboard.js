@@ -1,6 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Settings, RefreshCw, TrendingUp, Target, DollarSign, BarChart3, TrendingDown, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+
 
 const validPeriods = {
     '1m': [{ value: '1d', label: '1 Day' }, { value: '3d', label: '3 Days' }, { value: '7d', label: '7 Days (Max)' }],
@@ -38,6 +40,7 @@ const BacktestDashboard = () => {
             setTrades([]);
             setChartData([]);
             try {
+                const backendUrl = process.env.REACT_APP_RENDER_WORKER_URL;
                 const response = await fetch(`/api/backtest`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
