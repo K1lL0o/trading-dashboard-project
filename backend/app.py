@@ -1,6 +1,8 @@
 ﻿#
 # 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE: /backend/app.py
+# This version is complete and fixes the SyntaxError.
 #
+
 import os
 import requests
 from flask import Flask, request, jsonify
@@ -12,15 +14,11 @@ import pandas_ta as ta
 import traceback
 
 app = Flask(__name__)
-CORS(app, origins=[
-    "https://killo.online",
-    "https://trading-dashboard-project.vercel.app" # Your Vercel project's default URL
-])
+CORS(app, origins=["https://killo.online", "https://trading-dashboard-project.vercel.app"])
 
 # --- GLOBAL STATE & ENVIRONMENT VARIABLES ---
 live_monitor_config = {"is_running": False, "config": None}
 current_trade = None
-DATABASE_URL = os.getenv('DATABASE_URL')
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 
 # --- DISCORD NOTIFICATION LOGIC ---
@@ -84,30 +82,21 @@ def generate_signals(df, strategy_name):
         short_conditions = (df['RSI_14'] < 40) & (df['EMA_5'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50'])
         df.loc[long_conditions, 'signal'] = 'LONG'
         df.loc[short_conditions, 'signal'] = 'SHORT'
-    # Add other strategies here...
     return df
 
 # --- THE CORE WORKER LOGIC ---
 def check_live_trade():
     global current_trade, live_monitor_config
-    if not live_monitor_config["is_running"]:
-        return
+    if not live_monitor_config["is_running"]: return
 
     cfg = live_monitor_config["config"]
-
     try:
-        # --- THIS IS THE FIX ---
         print(f"Worker fetching data for: {cfg['symbol']}")
         ticker = yf.Ticker(cfg['symbol'])
-        data = ticker.history(
-            period='5d',
-            interval=cfg['timeframe'],
-            auto_adjust=True
-        )
-    try:
-        data = yf.download(tickers=cfg['symbol'], period='5d', interval=cfg['timeframe'], progress=False)
+        data = ticker.history(period='5d', interval=cfg['timeframe'], auto_adjust=True)
+
         if data.empty:
-            print(f"Worker: No data returned for {cfg['symbol']}")
+            print(f"Worker: yfinance returned empty DataFrame for {cfg['symbol']}.")
             return
 
         clean_df = clean_yfinance_data(data)
@@ -143,7 +132,9 @@ def check_live_trade():
             send_discord_notification(current_trade, "Entry", cfg['strategy'])
 
     except Exception as e:
-        print(f"Error in worker thread: {e}")
+        print("--- DETAILED WORKER TRACEBACK ---")
+        traceback.print_exc()
+        print("---------------------------------")
 
 # --- API TO CONTROL THE WORKER ---
 @app.route('/start', methods=['POST'])
@@ -151,7 +142,6 @@ def start_monitor():
     global live_monitor_config
     config = request.json
     live_monitor_config = {"is_running": True, "config": config}
-    print(f"WORKER STARTED with config: {config}")
     return jsonify({"status": "Live monitor started"})
 
 @app.route('/stop', methods=['POST'])
@@ -159,7 +149,6 @@ def stop_monitor():
     global live_monitor_config, current_trade
     live_monitor_config = {"is_running": False, "config": None}
     current_trade = None
-    print("WORKER STOPPED")
     return jsonify({"status": "Live monitor stopped"})
 
 # --- SCHEDULER ---
@@ -172,5 +161,5 @@ def index():
     return "<h1>Live Signal Worker is Running</h1>"
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
