@@ -3,14 +3,12 @@
 #
 import os
 import requests
-import psycopg2
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
-from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app, origins=[

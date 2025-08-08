@@ -2,11 +2,15 @@
 # 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE: /api/backtest.py
 #
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
 
 app = Flask(__name__)
+
+CORS(app, origins=["https://killo.online", "https://trading-dashboard-project.vercel.app"])
+
 
 # --- ROBUST DATA CLEANING FUNCTION ---
 def clean_yfinance_data(df):

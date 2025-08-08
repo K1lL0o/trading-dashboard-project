@@ -1,3 +1,6 @@
+# In api/requirements.txt
+Flask
+Flask-Cors  # <-- ADD THIS LINE
 pandas
 yfinance>=0.2.37
 pandas_ta
