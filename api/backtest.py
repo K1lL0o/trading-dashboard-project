@@ -1,6 +1,8 @@
 ﻿#
 # 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE: /api/backtest.py
+# This is the complete, final version that fixes the syntax and logic errors.
 #
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import yfinance as yf
@@ -9,9 +11,8 @@ import pandas_ta as ta
 import traceback
 
 app = Flask(__name__)
-
+# This CORS configuration is essential for your Vercel function to accept requests
 CORS(app, origins=["https://killo.online", "https://trading-dashboard-project.vercel.app"])
-
 
 # --- ROBUST DATA CLEANING FUNCTION ---
 def clean_yfinance_data(df):
@@ -117,18 +118,11 @@ def run_backtest_simulation(df, initial_capital, slippage_pips, commission_per_t
 def backtest_handler():
     config = request.get_json()
     try:
-        # --- THIS IS THE FIX ---
-        print(f"Fetching data for: {config['symbol']}")
-        # 1. Create a yfinance Ticker object
         ticker = yf.Ticker(config['symbol'])
-        # 2. Download data using the Ticker object, which is often more stable
-        data = ticker.history(
-            period=config['period'],
-            interval=config['timeframe'],
-            auto_adjust=True
-        )
+        data = ticker.history(period=config['period'], interval=config['timeframe'], auto_adjust=True)
+        
         if data.empty:
-            return jsonify({"error": "No data found for these parameters"}), 404
+            return jsonify({"error": f"No data found for symbol '{config['symbol']}'."}), 404
         
         clean_df = clean_yfinance_data(data)
         signals_df = generate_signals(clean_df, config['strategy'])
@@ -154,8 +148,7 @@ def backtest_handler():
         }), 200
         
     except Exception as e:
-        print("--- DETAILED BACKEND TRACEBACK ---")
-        import traceback
+        print("--- VERCEL API TRACEBACK ---")
         traceback.print_exc()
-        print("------------------------------------")
-        return jsonify({"error": "A backend error occurred. Check server logs for details."}), 500
+        print("----------------------------")
+        return jsonify({"error": f"A critical backend error occurred: {str(e)}"}), 500
