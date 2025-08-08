@@ -9,6 +9,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
+import traceback
 
 app = Flask(__name__)
 CORS(app, origins=[
@@ -93,6 +94,16 @@ def check_live_trade():
         return
 
     cfg = live_monitor_config["config"]
+
+    try:
+        # --- THIS IS THE FIX ---
+        print(f"Worker fetching data for: {cfg['symbol']}")
+        ticker = yf.Ticker(cfg['symbol'])
+        data = ticker.history(
+            period='5d',
+            interval=cfg['timeframe'],
+            auto_adjust=True
+        )
     try:
         data = yf.download(tickers=cfg['symbol'], period='5d', interval=cfg['timeframe'], progress=False)
         if data.empty:

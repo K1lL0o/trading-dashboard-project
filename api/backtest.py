@@ -6,6 +6,7 @@ from flask_cors import CORS
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
+import traceback
 
 app = Flask(__name__)
 
@@ -116,9 +117,15 @@ def run_backtest_simulation(df, initial_capital, slippage_pips, commission_per_t
 def backtest_handler():
     config = request.get_json()
     try:
-        data = yf.download(
-            tickers=config['symbol'], period=config['period'],
-            interval=config['timeframe'], progress=False
+        # --- THIS IS THE FIX ---
+        print(f"Fetching data for: {config['symbol']}")
+        # 1. Create a yfinance Ticker object
+        ticker = yf.Ticker(config['symbol'])
+        # 2. Download data using the Ticker object, which is often more stable
+        data = ticker.history(
+            period=config['period'],
+            interval=config['timeframe'],
+            auto_adjust=True
         )
         if data.empty:
             return jsonify({"error": "No data found for these parameters"}), 404
@@ -147,6 +154,8 @@ def backtest_handler():
         }), 200
         
     except Exception as e:
+        print("--- DETAILED BACKEND TRACEBACK ---")
         import traceback
         traceback.print_exc()
+        print("------------------------------------")
         return jsonify({"error": "A backend error occurred. Check server logs for details."}), 500
