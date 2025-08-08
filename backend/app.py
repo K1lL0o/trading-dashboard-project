@@ -103,6 +103,8 @@ def generate_signals(df, strategy_name):
 def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_day, atr_multiplier, target_multiplier, slippage_pips, commission_per_trade):
     trades = []
     capital = initial_capital
+    peak_capital = initial_capital
+    max_drawdown = 0.0
     position = None
     daily_trade_count = {}
     slippage = slippage_pips * 0.0001
@@ -112,44 +114,48 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
         current = df.iloc[i]
         prev = df.iloc[i-1]
         
-        # Reset daily trade count
         current_date = current['time'].date()
         if current_date not in daily_trade_count:
             daily_trade_count[current_date] = 0
 
-        # EXIT LOGIC
         if position:
             exit_reason, exit_price = None, 0.0
             if position['type'] == 'LONG':
-                if current['Low'] <= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss'] - slippage
-                elif current['High'] >= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit'] - slippage
+                if current['Low'] <= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss']
+                elif current['High'] >= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit']
             elif position['type'] == 'SHORT':
-                if current['High'] >= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss'] + slippage
-                elif current['Low'] <= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit'] + slippage
-
+                if current['High'] >= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss']
+                elif current['Low'] <= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit']
+            
             if i == len(df) - 1 and not exit_reason:
                 exit_reason, exit_price = "End of Period", current['Close']
 
             if exit_reason:
+                exit_price += (slippage if position['type'] == 'SHORT' else -slippage)
                 pnl = (exit_price - position['entry_price']) * position['position_size'] if position['type'] == 'LONG' else (position['entry_price'] - exit_price) * position['position_size']
-                pnl -= commission_per_trade; capital += pnl
-                position.update({'exit_price': exit_price, 'pnl': pnl, 'exit_reason': exit_reason}); trades.append(position); position = None
+                pnl -= commission_per_trade
+                capital += pnl
+                peak_capital = max(peak_capital, capital)
+                drawdown = (peak_capital - capital) / peak_capital if peak_capital > 0 else 0
+                max_drawdown = max(max_drawdown, drawdown)
+                position.update({'exit_price': exit_price, 'pnl': pnl, 'exit_reason': exit_reason})
+                trades.append(position)
+                position = None
 
-        # ENTRY LOGIC
-        if not position and current['signal'] != 'STAY_OUT' and prev['signal'] == 'STAY_OUT':
+        if not position and prev['signal'] == 'STAY_OUT' and current['signal'] != 'STAY_OUT':
             if daily_trade_count[current_date] >= max_trades_per_day: continue
 
-            atr = (current['BBU_20_2.0'] - current['BBL_20_2.0']) * 0.7 # Approximation of ATR
-            if pd.isna(atr) or atr == 0: continue
+            atr_approx = (current['High'] - current['Low']) * 0.7
+            if pd.isna(atr_approx) or atr_approx == 0: continue
 
             entry_price = current['Open'] + (slippage if current['signal'] == 'LONG' else -slippage)
             
             if current['signal'] == 'LONG':
-                stop_loss = entry_price - (atr * atr_multiplier)
-                take_profit = entry_price + (atr * target_multiplier)
+                stop_loss = entry_price - (atr_approx * atr_multiplier)
+                take_profit = entry_price + (atr_approx * target_multiplier)
             else: # SHORT
-                stop_loss = entry_price + (atr * atr_multiplier)
-                take_profit = entry_price - (atr * target_multiplier)
+                stop_loss = entry_price + (atr_approx * atr_multiplier)
+                take_profit = entry_price - (atr_approx * target_multiplier)
 
             risk_amount = capital * (risk_per_trade / 100)
             price_diff = abs(entry_price - stop_loss)
@@ -158,14 +164,36 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
             if position_size > 0:
                 daily_trade_count[current_date] += 1
                 position = {'entry_date': current['time'], 'type': current['signal'], 'entry_price': entry_price, 'stop_loss': stop_loss, 'take_profit': take_profit, 'position_size': position_size}
-    if not trades: return {"error": "No trades were executed."}
-    total_return = ((capital - initial_capital) / initial_capital) * 100
-    wins = [t for t in trades if t['pnl'] > 0]; losses = [t for t in trades if t['pnl'] <= 0]
-    win_rate = (len(wins) / len(trades)) * 100 if trades else 0
-    total_profit = sum(t['pnl'] for t in wins); total_loss = abs(sum(t['pnl'] for t in losses))
-    profit_factor = total_profit / total_loss if total_loss > 0 else 999
-    return {"trades": trades, "performance": {"totalReturn": round(total_return, 2), "winRate": round(win_rate, 2), "profitFactor": round(profit_factor, 2), "totalTrades": len(trades), "avgWin": round(total_profit / len(wins) if wins else 0, 2), "avgLoss": round(total_loss / len(losses) if losses else 0, 2), "maxDrawdown": round(max_drawdown * 100, 2), "finalCapital": round(capital, 2)}}
 
+    # --- THIS IS THE FIX for the NameError ---
+    if not trades:
+        return {
+            "trades": [],
+            "performance": {
+                "totalReturn": 0, "winRate": 0, "profitFactor": 0, "totalTrades": 0,
+                "avgWin": 0, "avgLoss": 0, "maxDrawdown": 0, "finalCapital": initial_capital
+            },
+            "error": "No trades were executed during this backtest."
+        }
+    
+    total_return_percent = ((capital - initial_capital) / initial_capital) * 100
+    winning_trades = [t for t in trades if t['pnl'] > 0]
+    losing_trades = [t for t in trades if t['pnl'] <= 0]
+    win_rate = (len(winning_trades) / len(trades)) * 100
+    total_profit = sum(t['pnl'] for t in winning_trades)
+    total_loss = abs(sum(t['pnl'] for t in losing_trades))
+    profit_factor = total_profit / total_loss if total_loss > 0 else 999
+    
+    return {
+        "trades": trades,
+        "performance": {
+            "totalReturn": round(total_return_percent, 2), "winRate": round(win_rate, 2),
+            "profitFactor": round(profit_factor, 2), "totalTrades": len(trades),
+            "avgWin": round(total_profit / len(winning_trades) if winning_trades else 0, 2),
+            "avgLoss": round(total_loss / len(losing_trades) if losing_trades else 0, 2),
+            "maxDrawdown": round(max_drawdown * 100, 2), "finalCapital": round(capital, 2)
+        }
+    }
 # --- THE CORE WORKER LOGIC ---
 def check_live_trade():
     global current_trade, live_monitor_config
@@ -254,7 +282,7 @@ def backtest_route():
             slippage_pips=float(config.get('slippage', 1.5)),
             commission_per_trade=float(config.get('commission', 4.0))
         )
-        if "error" in results: return jsonify(results), 400
+        if "error" in results: return jsonify({ "performance": results.get('performance'), "trades": [], "chartData": [], "error": results['error'] }), 200
         chart_data = signals_df.tail(300).to_dict('records')
         return jsonify({"performance": results['performance'], "trades": results['trades'], "chartData": chart_data}), 200
     except Exception as e:
