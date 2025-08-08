@@ -136,7 +136,9 @@ def check_live_trade():
         traceback.print_exc()
         print("---------------------------------")
 
-# --- API TO CONTROL THE WORKER ---
+# --- API ENDPOINTS (NOW ALL IN ONE PLACE) ---
+
+# Endpoints for the Live Monitor
 @app.route('/start', methods=['POST'])
 def start_monitor():
     global live_monitor_config
@@ -151,14 +153,54 @@ def stop_monitor():
     current_trade = None
     return jsonify({"status": "Live monitor stopped"})
 
-# --- SCHEDULER ---
+# Endpoint for polling
+@app.route('/check-signal')
+def check_signal_route():
+    if live_monitor_config["is_running"]:
+        check_live_trade()
+    return jsonify({"status": "checked"})
+
+# --- NEW: The Backtest Endpoint now lives here ---
+@app.route('/api/backtest', methods=['POST'])
+def backtest_route():
+    config = request.get_json()
+    try:
+        ticker = yf.Ticker(config['symbol'])
+        data = ticker.history(period=config['period'], interval=config['timeframe'], auto_adjust=True)
+        if data.empty:
+            return jsonify({"error": f"No data found for symbol '{config['symbol']}'."}), 404
+        
+        clean_df = clean_yfinance_data(data)
+        signals_df = generate_signals(clean_df, config['strategy'])
+        date_col_name = 'Datetime' if 'Datetime' in signals_df.columns else 'Date'
+        signals_df.rename(columns={date_col_name: 'time'}, inplace=True)
+        
+        results = run_backtest_simulation(
+            signals_df, 10000,
+            float(config.get('slippage', 1.5)), 
+            float(config.get('commission', 4.0))
+        )
+        if "error" in results: return jsonify(results), 400
+
+        chart_data = signals_df.tail(300).to_dict('records')
+        return jsonify({
+            "performance": results['performance'],
+            "trades": results['trades'],
+            "chartData": chart_data
+        }), 200
+        
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"A critical backend error occurred: {str(e)}"}), 500
+
+# --- SCHEDULER & MAIN BLOCK ---
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_live_trade, trigger="interval", seconds=60)
 scheduler.start()
 
 @app.route('/')
 def index():
-    return "<h1>Live Signal Worker is Running</h1>"
+    return "<h1>Trading API (Live + Backtest) is Running</h1>"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
