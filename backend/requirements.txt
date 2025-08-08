@@ -1,3 +1,4 @@
+# In backend/requirements.txt
 setuptools==69.5.1
 Flask
 Flask-Cors
@@ -7,3 +8,7 @@ pandas
 yfinance>=0.2.37
 pandas_ta
 numpy<2.0
+Flask-SSE
+APScheduler
+psycopg2-binary
+gevent

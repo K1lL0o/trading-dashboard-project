@@ -1,9 +1,4 @@
-﻿//
-// 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE: /frontend/src/components/BacktestDashboard.js
-// This version restores the UI layout and includes all advanced backtesting features.
-//
-
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Settings, RefreshCw, TrendingUp, Target, DollarSign, BarChart3, TrendingDown, AlertTriangle } from 'lucide-react';
 
@@ -18,12 +13,8 @@ const validPeriods = {
 
 const BacktestDashboard = () => {
     const [config, setConfig] = useState({
-        symbol: 'EURUSD=X',
-        timeframe: '60m',
-        period: '6mo',
-        strategy: 'momentum',
-        slippage: 1.5,
-        commission: 4.00
+        symbol: 'EURUSD=X', timeframe: '60m', period: '6mo', strategy: 'momentum',
+        slippage: 1.5, commission: 4.00
     });
     const [performance, setPerformance] = useState(null);
     const [trades, setTrades] = useState([]);
@@ -31,20 +22,14 @@ const BacktestDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Effect to ensure the selected period is always valid
     useEffect(() => {
         const availablePeriods = validPeriods[config.timeframe];
         const isCurrentPeriodValid = availablePeriods.some(p => p.value === config.period);
-
         if (!isCurrentPeriodValid) {
-            setConfig(prevConfig => ({
-                ...prevConfig,
-                period: availablePeriods[0].value
-            }));
+            setConfig(prevConfig => ({ ...prevConfig, period: availablePeriods[0].value }));
         }
-    }, [config.timeframe]);
+    }, [config.timeframe, config.period]);
 
-    // Effect that runs the backtest
     useEffect(() => {
         const runBacktest = async () => {
             setLoading(true);
@@ -53,8 +38,7 @@ const BacktestDashboard = () => {
             setTrades([]);
             setChartData([]);
             try {
-                const backendUrl = process.env.REACT_APP_API_URL;
-                const response = await fetch(`${backendUrl}/api/backtest`, {
+                const response = await fetch(`/api/backtest`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config),
@@ -71,17 +55,12 @@ const BacktestDashboard = () => {
                 setLoading(false);
             }
         };
-
-        const handler = setTimeout(() => {
-            runBacktest();
-        }, 500);
-
+        const handler = setTimeout(() => { runBacktest(); }, 500);
         return () => clearTimeout(handler);
     }, [config]);
 
     return (
         <div>
-            {/* --- RESTORED: MAIN CONFIGURATION SECTION (4 columns) --- */}
             <section className="mb-8">
                 <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
                     <h2 className="text-lg font-semibold mb-4 flex items-center"><Settings className="w-5 h-5 mr-2 text-blue-400" />Backtest Configuration</h2>
@@ -89,52 +68,32 @@ const BacktestDashboard = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
                             <select value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
-                                <optgroup label="Forex">
-                                    <option value="EURUSD=X">EUR/USD</option>
-                                    <option value="GBPUSD=X">GBP/USD</option>
-                                    <option value="USDJPY=X">USD/JPY</option>
-                                    <option value="AUDUSD=X">AUD/USD</option>
-                                    <option value="USDCAD=X">USD/CAD</option>
-                                </optgroup>
-                                <optgroup label="Crypto">
-                                    <option value="BTC-USD">BTC/USD</option>
-                                    <option value="ETH-USD">ETH/USD</option>
-                                </optgroup>
+                                <optgroup label="Forex"><option value="EURUSD=X">EUR/USD</option><option value="GBPUSD=X">GBP/USD</option></optgroup>
+                                <optgroup label="Crypto"><option value="BTC-USD">BTC/USD</option><option value="ETH-USD">ETH/USD</option></optgroup>
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Timeframe</label>
                             <select value={config.timeframe} onChange={(e) => setConfig({ ...config, timeframe: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
-                                <option value="1m">1 Minute</option>
-                                <option value="5m">5 Minutes</option>
-                                <option value="15m">15 Minutes</option>
-                                <option value="30m">30 Minutes</option>
-                                <option value="60m">1 Hour</option>
-                                <option value="1d">1 Day</option>
+                                {Object.keys(validPeriods).map(tf => <option key={tf} value={tf}>{tf}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Period</label>
                             <select value={config.period} onChange={(e) => setConfig({ ...config, period: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
-                                {validPeriods[config.timeframe].map(periodOption => (
-                                    <option key={periodOption.value} value={periodOption.value}>
-                                        {periodOption.label}
-                                    </option>
-                                ))}
+                                {validPeriods[config.timeframe].map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Strategy</label>
                             <select value={config.strategy} onChange={(e) => setConfig({ ...config, strategy: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                                 <option value="momentum">Momentum</option>
-                                <option value="scalping">Scalping</option>
                             </select>
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* --- NEW: TRADE PARAMETERS SECTION --- */}
             <section className="mb-8">
                 <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
                     <h2 className="text-lg font-semibold mb-4 flex items-center">Trade Parameters</h2>
@@ -151,7 +110,7 @@ const BacktestDashboard = () => {
                 </div>
             </section>
 
-            {(loading) && <div className="text-center py-8"><RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-400" /></div>}
+            {loading && <div className="text-center py-8"><RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-400" /></div>}
             {error && <div className="text-center py-8 text-red-400">Error: {error}</div>}
 
             {performance && !loading && (
@@ -169,7 +128,7 @@ const BacktestDashboard = () => {
             {chartData.length > 0 && !loading && (
                 <section className="grid grid-cols-1 mb-8">
                     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6 min-h-[400px]">
-                        <h3 className="text-lg font-semibold mb-4 text-blue-400">Backtest Results</h3>
+                        <h3 className="text-lg font-semibold mb-4 text-blue-400">Backtest Chart</h3>
                         <ResponsiveContainer width="100%" height={320}>
                             <LineChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -220,7 +179,6 @@ const BacktestDashboard = () => {
     );
 };
 
-// Helper component for displaying stats
 const StatCard = ({ icon: Icon, label, value, isPositive }) => (
     <div className={`bg-gradient-to-br ${isPositive === true ? 'from-green-900/50' : isPositive === false ? 'from-red-900/50' : 'from-blue-900/50'} to-gray-800/30 p-4 rounded-xl border border-gray-500/30`}>
         <div className="flex items-center justify-between mb-2">
