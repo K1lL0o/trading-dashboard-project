@@ -1,7 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Settings, RefreshCw, TrendingUp, Target, DollarSign, BarChart3, TrendingDown, AlertTriangle } from 'lucide-react';
-
 
 const validPeriods = {
     '1m': [{ value: '1d', label: '1 Day' }, { value: '3d', label: '3 Days' }, { value: '7d', label: '7 Days (Max)' }],
@@ -39,8 +38,14 @@ const BacktestDashboard = () => {
             setTrades([]);
             setChartData([]);
             try {
+                // --- THIS IS THE FINAL FIX ---
+                // We now call the full URL of the Render server, just like the live monitor does.
                 const backendUrl = process.env.REACT_APP_RENDER_WORKER_URL;
-                const response = await fetch(`/api/backtest`, {
+                if (!backendUrl) {
+                    throw new Error("Render worker URL is not configured in environment variables.");
+                }
+                const response = await fetch(`${backendUrl}/api/backtest`, {
+                    // ---------------------------
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config),
