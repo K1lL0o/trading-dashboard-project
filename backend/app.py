@@ -10,9 +10,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
+from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=[
+    "https://killo.online",
+    "https://trading-dashboard-project.vercel.app" # Your Vercel project's default URL
+])
 
 # --- GLOBAL STATE & ENVIRONMENT VARIABLES ---
 live_monitor_config = {"is_running": False, "config": None}
