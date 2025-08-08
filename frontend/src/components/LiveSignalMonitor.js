@@ -72,8 +72,17 @@ const LiveSignalMonitor = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
                             <select disabled={isRunning} value={config.symbol} onChange={(e) => setConfig({ ...config, symbol: e.target.value })} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
-                                <optgroup label="Forex"><option value="EURUSD=X">EUR/USD</option><option value="GBPUSD=X">GBP/USD</option></optgroup>
-                                <optgroup label="Crypto"><option value="BTC-USD">BTC/USD</option><option value="ETH-USD">ETH/USD</option></optgroup>
+                                <optgroup label="Forex">
+                                    <option value="EURUSD=X">EUR/USD</option>
+                                    <option value="GBPUSD=X">GBP/USD</option>
+                                    <option value="USDJPY=X">USD/JPY</option>
+                                    <option value="AUDUSD=X">AUD/USD</option>
+                                    <option value="USDCAD=X">USD/CAD</option>
+                                </optgroup>
+                                <optgroup label="Crypto">
+                                    <option value="BTC-USD">BTC/USD</option>
+                                    <option value="ETH-USD">ETH/USD</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div>

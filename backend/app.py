@@ -49,14 +49,63 @@ def clean_yfinance_data(df):
 
 # --- CORE TRADING LOGIC ---
 def generate_signals(df, strategy_name):
-    df.ta.ema(length=5, append=True); df.ta.ema(length=20, append=True); df.ta.ema(length=50, append=True)
-    df.ta.rsi(length=14, append=True); df.ta.bbands(length=20, append=True)
+    # Calculate a comprehensive set of indicators needed for all strategies
+    df.ta.ema(length=5, append=True)
+    df.ta.ema(length=10, append=True)
+    df.ta.ema(length=20, append=True)
+    df.ta.ema(length=50, append=True)
+    df.ta.rsi(length=7, append=True)
+    df.ta.rsi(length=14, append=True)
+    df.ta.bbands(length=20, append=True)
+    # Add a fast MACD for the scalping strategy
+    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('MACD_5_12_3', 'MACDh_5_12_3', 'MACDs_5_12_3'))
+    
+    # Default signal is to do nothing
     df['signal'] = 'STAY_OUT'
+
+    # --- Momentum Strategy (Upgraded) ---
     if strategy_name == 'momentum':
-        long_conditions = (df['RSI_14'] > 60) & (df['EMA_5'] > df['EMA_20']) & (df['EMA_20'] > df['EMA_50'])
-        short_conditions = (df['RSI_14'] < 40) & (df['EMA_5'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50'])
+        # Conditions for a strong uptrend
+        long_conditions = (
+            (df['RSI_14'] > 60) &
+            (df['RSI_7'] > 65) &
+            (df['EMA_5'] > df['EMA_10']) &
+            (df['EMA_10'] > df['EMA_20']) &
+            (df['EMA_20'] > df['EMA_50'])
+        )
+        # Conditions for a strong downtrend
+        short_conditions = (
+            (df['RSI_14'] < 40) &
+            (df['RSI_7'] < 35) &
+            (df['EMA_5'] < df['EMA_10']) &
+            (df['EMA_10'] < df['EMA_20']) &
+            (df['EMA_20'] < df['EMA_50'])
+        )
         df.loc[long_conditions, 'signal'] = 'LONG'
         df.loc[short_conditions, 'signal'] = 'SHORT'
+        
+    # --- Scalping Strategy (New) ---
+    elif strategy_name == 'scalping':
+        # Calculate scores for long and short signals
+        long_score = pd.Series(0, index=df.index)
+        short_score = pd.Series(0, index=df.index)
+
+        # Condition 1: Fast MACD Crossover (Score: +2)
+        long_score += (df['MACD_5_12_3'] > df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) <= df['MACDs_5_12_3'].shift(1)) * 2
+        short_score += (df['MACD_5_12_3'] < df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) >= df['MACDs_5_12_3'].shift(1)) * 2
+
+        # Condition 2: RSI (Score: +1)
+        long_score += (df['RSI_7'] < 35) * 1
+        short_score += (df['RSI_7'] > 65) * 1
+
+        # Condition 3: EMA Alignment (Score: +1)
+        long_score += (df['EMA_5'] > df['EMA_10']) & (df['EMA_10'] > df['EMA_20']) * 1
+        short_score += (df['EMA_5'] < df['EMA_10']) & (df['EMA_10'] < df['EMA_20']) * 1
+        
+        # Final Signal based on score
+        df.loc[long_score >= 3, 'signal'] = 'LONG'
+        df.loc[short_score >= 3, 'signal'] = 'SHORT'
+
     return df
 
 def run_backtest_simulation(df, initial_capital, slippage_pips, commission_per_trade):
