@@ -205,12 +205,15 @@ def get_monitor_status():
 def get_live_signals():
     conn = get_db_connection()
     if not conn: return jsonify({"error": "Database connection failed"}), 500
-    cur = conn.cursor()
+
+    signals = []
     try:
+        cur = conn.cursor()
         cur.execute("SELECT id, symbol, strategy, timeframe, status, trade_type, entry_price, exit_price, stop_loss, take_profit, entry_date, exit_date, exit_reason FROM live_signals ORDER BY entry_date DESC LIMIT 100;")
         signals_data = cur.fetchall()
-        columns = [desc[0] for desc in cur.description]
-        signals = [dict(zip(columns, row)) for row in signals_data]
+        if cur.description is not None:
+            columns = [desc[0] for desc in cur.description]
+            signals = [dict(zip(columns, row)) for row in signals_data]
     except Exception as e:
         traceback.print_exc(); return jsonify({"error": str(e)}), 500
     finally:
