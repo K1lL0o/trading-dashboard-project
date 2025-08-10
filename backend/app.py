@@ -5,32 +5,41 @@
 
 import os
 import requests
+import traceback
+import psycopg2
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
-import traceback
 
 app = Flask(__name__)
 CORS(app, origins=["https://killo.online", "https://trading-dashboard-project.vercel.app"])
 
-# --- GLOBAL STATE & ENVIRONMENT VARIABLES ---
-live_monitor_config = {"is_running": False, "config": None}
-current_trade = None
+# --- DATABASE CONNECTION & ENVIRONMENT VARIABLES ---
+DATABASE_URL = os.getenv('DATABASE_URL')
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 
-# --- DISCORD NOTIFICATION LOGIC ---
+def get_db_connection():
+    """Establishes a new database connection."""
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        return None
+
+# --- ALL HELPER FUNCTIONS (Discord, Cleaning, Signals, Backtest Engine) ---
+# These functions are complete and correct from our previous steps.
 def send_discord_notification(trade_details, reason, strategy_name):
-    # This function is complete and correct
     if not DISCORD_WEBHOOK_URL: return
     color = {"Entry": 3447003, "Take Profit": 3066993, "Stop Loss": 15158332}.get(reason, 10070709)
     title = f"🚀 New Entry: {trade_details['type']}" if reason == "Entry" else f"✅ Exit: {reason}"
-    embed = {"title": title, "color": color, "fields": [{"name": "Symbol", "value": trade_details['symbol'], "inline": True}, {"name": "Strategy", "value": strategy_name.replace('_', ' ').title(), "inline": True}, {"name": "Timeframe", "value": trade_details['timeframe'], "inline": True}, {"name": "Entry Price", "value": f"{trade_details['entry_price']:.5f}", "inline": True}]}
+    embed = {"title": title,"color": color,"fields": [{"name": "Symbol","value": trade_details['symbol'],"inline": True},{"name": "Strategy","value": strategy_name.replace('_', ' ').title(),"inline": True},{"name": "Timeframe","value": trade_details['timeframe'],"inline": True},{"name": "Entry Price","value": f"{trade_details['entry_price']:.5f}","inline": True}]}
     if reason != "Entry":
         pnl = (trade_details['exit_price'] - trade_details['entry_price']) * (1 if trade_details['type'] == 'LONG' else -1)
-        pnl_percent = (pnl / trade_details['entry_price']) * 100
+        pnl_percent = (pnl / trade_details['entry_price']) * 100 if trade_details['entry_price'] != 0 else 0
         embed["fields"].extend([{"name": "Exit Price", "value": f"{trade_details['exit_price']:.5f}", "inline": True}, {"name": "Result", "value": f"{pnl_percent:+.2f}%", "inline": True}])
     else:
         embed["fields"].extend([{"name": "Stop Loss", "value": f"{trade_details['stop_loss']:.5f}", "inline": True}, {"name": "Take Profit", "value": f"{trade_details['take_profit']:.5f}", "inline": True}])
@@ -39,65 +48,29 @@ def send_discord_notification(trade_details, reason, strategy_name):
     except Exception as e:
         print(f"Error sending Discord notification: {e}")
 
-# --- ROBUST DATA CLEANING FUNCTION ---
 def clean_yfinance_data(df):
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.droplevel(1)
-    df = df.reset_index()
-    df.columns = [col.capitalize() for col in df.columns]
-    return df
+    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
+    df = df.reset_index(); df.columns = [col.capitalize() for col in df.columns]; return df
 
-# --- CORE TRADING LOGIC ---
 def generate_signals(df, strategy_name):
-    # Calculate a comprehensive set of indicators
-    df.ta.ema(length=5, append=True)
-    df.ta.ema(length=10, append=True)
-    df.ta.ema(length=20, append=True)
-    df.ta.ema(length=50, append=True)
-    df.ta.rsi(length=7, append=True)
-    df.ta.rsi(length=14, append=True)
-    df.ta.bbands(length=20, append=True)
-    df.ta.macd(fast=12, slow=26, signal=9, append=True) # Standard MACD
-    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('MACD_5_12_3', 'MACDh_5_12_3', 'MACDs_5_12_3')) # Fast MACD
-    
+    # (Full, advanced signal generation logic from previous step)
+    df.ta.ema(length=5, append=True); df.ta.ema(length=10, append=True); df.ta.ema(length=20, append=True); df.ta.ema(length=50, append=True)
+    df.ta.rsi(length=7, append=True); df.ta.rsi(length=14, append=True); df.ta.bbands(length=20, append=True)
+    df.ta.macd(fast=12, slow=26, signal=9, append=True)
+    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('MACD_5_12_3', 'MACDh_5_12_3', 'MACDs_5_12_3'))
     df['signal'] = 'STAY_OUT'
-
     if strategy_name == 'momentum':
-        long_conditions = (
-            (df['RSI_14'] > 60) &
-            (df['RSI_7'] > 65) &
-            (df['EMA_5'] > df['EMA_10']) &
-            (df['EMA_10'] > df['EMA_20']) &
-            (df['EMA_20'] > df['EMA_50']) &
-            (df['MACD_12_26_9'] > df['MACDs_12_26_9'])
-        )
-        short_conditions = (
-            (df['RSI_14'] < 40) &
-            (df['RSI_7'] < 35) &
-            (df['EMA_5'] < df['EMA_10']) &
-            (df['EMA_10'] < df['EMA_20']) &
-            (df['EMA_20'] < df['EMA_50']) &
-            (df['MACD_12_26_9'] < df['MACDs_12_26_9'])
-        )
-        df.loc[long_conditions, 'signal'] = 'LONG'
-        df.loc[short_conditions, 'signal'] = 'SHORT'
-        
+        long_conditions = ((df['RSI_14'] > 60) & (df['RSI_7'] > 65) & (df['EMA_5'] > df['EMA_10']) & (df['EMA_10'] > df['EMA_20']) & (df['EMA_20'] > df['EMA_50']) & (df['MACD_12_26_9'] > df['MACDs_12_26_9']))
+        short_conditions = ((df['RSI_14'] < 40) & (df['RSI_7'] < 35) & (df['EMA_5'] < df['EMA_10']) & (df['EMA_10'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50']) & (df['MACD_12_26_9'] < df['MACDs_12_26_9']))
+        df.loc[long_conditions, 'signal'] = 'LONG'; df.loc[short_conditions, 'signal'] = 'SHORT'
     elif strategy_name == 'scalping':
-        long_score = pd.Series(0, index=df.index)
-        short_score = pd.Series(0, index=df.index)
-        
+        long_score = pd.Series(0, index=df.index); short_score = pd.Series(0, index=df.index)
         long_score += pd.Series((df['MACD_5_12_3'] > df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) <= df['MACDs_5_12_3'].shift(1))).astype(int) * 2
         short_score += pd.Series((df['MACD_5_12_3'] < df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) >= df['MACDs_5_12_3'].shift(1))).astype(int) * 2
-        
-        long_score += pd.Series(df['RSI_7'] < 35).astype(int)
-        short_score += pd.Series(df['RSI_7'] > 65).astype(int)
-
+        long_score += pd.Series(df['RSI_7'] < 35).astype(int); short_score += pd.Series(df['RSI_7'] > 65).astype(int)
         long_score += pd.Series((df['EMA_5'] > df['EMA_10']) & (df['EMA_10'] > df['EMA_20'])).astype(int)
         short_score += pd.Series((df['EMA_5'] < df['EMA_10']) & (df['EMA_10'] < df['EMA_20'])).astype(int)
-        
-        df.loc[long_score >= 3, 'signal'] = 'LONG'
-        df.loc[short_score >= 3, 'signal'] = 'SHORT'
-
+        df.loc[long_score >= 3, 'signal'] = 'LONG'; df.loc[short_score >= 3, 'signal'] = 'SHORT'
     return df
 
 def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_day, atr_multiplier, target_multiplier, slippage_pips, commission_per_trade):
@@ -196,72 +169,108 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
     }
 # --- THE CORE WORKER LOGIC ---
 def check_live_trade():
-    global current_trade, live_monitor_config
-    if not live_monitor_config["is_running"]: return
-
-    cfg = live_monitor_config["config"]
+    conn = get_db_connection()
+    if not conn: return
+    
     try:
-        print(f"Worker fetching data for: {cfg['symbol']}")
-        ticker = yf.Ticker(cfg['symbol'])
-        data = ticker.history(period='5d', interval=cfg['timeframe'], auto_adjust=True)
+        cur = conn.cursor()
+        cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;')
+        config_row = cur.fetchone()
+        is_running = config_row[0] if config_row else False
+        
+        if not is_running: return
 
-        if data.empty:
-            print(f"Worker: yfinance returned empty DataFrame for {cfg['symbol']}.")
-            return
+        cfg = {"symbol": config_row[1], "strategy": config_row[2], "timeframe": config_row[3]}
+        
+        cur.execute("SELECT id, trade_type, entry_price, stop_loss, take_profit FROM live_signals WHERE status = 'active' ORDER BY entry_date DESC LIMIT 1;")
+        active_trade_row = cur.fetchone()
+        
+        data = yf.Ticker(cfg['symbol']).history(period='5d', interval=cfg['timeframe'], auto_adjust=True)
+        if data.empty: return
 
         clean_df = clean_yfinance_data(data)
         signals_df = generate_signals(clean_df, cfg['strategy'])
-        latest = signals_df.iloc[-1]
-        prev = signals_df.iloc[-2]
-        
-        # EXIT LOGIC
-        if current_trade:
-            exit_reason = None
-            if current_trade['type'] == 'LONG' and latest['Close'] >= current_trade['take_profit']: exit_reason = "Take Profit"
-            elif current_trade['type'] == 'LONG' and latest['Close'] <= current_trade['stop_loss']: exit_reason = "Stop Loss"
-            elif current_trade['type'] == 'SHORT' and latest['Close'] <= current_trade['take_profit']: exit_reason = "Take Profit"
-            elif current_trade['type'] == 'SHORT' and latest['Close'] >= current_trade['stop_loss']: exit_reason = "Stop Loss"
+        latest, prev = signals_df.iloc[-1], signals_df.iloc[-2]
+
+        if active_trade_row:
+            trade_id, trade_type, entry_price, stop_loss, take_profit = active_trade_row
+            exit_reason, exit_price = None, None
+            if trade_type == 'LONG' and latest['Close'] >= take_profit: exit_reason, exit_price = "Take Profit", latest['Close']
+            elif trade_type == 'LONG' and latest['Close'] <= stop_loss: exit_reason, exit_price = "Stop Loss", latest['Close']
+            elif trade_type == 'SHORT' and latest['Close'] <= take_profit: exit_reason, exit_price = "Take Profit", latest['Close']
+            elif trade_type == 'SHORT' and latest['Close'] >= stop_loss: exit_reason, exit_price = "Stop Loss", latest['Close']
             
             if exit_reason:
-                current_trade['exit_price'] = latest['Close']
-                send_discord_notification(current_trade, exit_reason, cfg['strategy'])
-                current_trade = None
-            return
+                cur.execute("UPDATE live_signals SET status = 'closed', exit_price = %s, exit_date = NOW(), exit_reason = %s WHERE id = %s;", (exit_price, exit_reason, trade_id))
+                conn.commit()
+                send_discord_notification({"symbol": cfg['symbol'], "type": trade_type, "timeframe": cfg['timeframe'], "entry_price": entry_price, "exit_price": exit_price}, exit_reason, cfg['strategy'])
 
-        # ENTRY LOGIC
-        if not current_trade and latest['signal'] != 'STAY_OUT' and prev['signal'] == 'STAY_OUT':
+        elif not active_trade_row and prev['signal'] == 'STAY_OUT' and latest['signal'] != 'STAY_OUT':
             atr = latest['BBU_20_2.0'] - latest['BBL_20_2.0']
             if pd.isna(atr) or atr == 0: return
-
-            current_trade = {
-                "symbol": cfg['symbol'], "type": latest['signal'], "timeframe": cfg['timeframe'],
-                "entry_price": latest['Close'],
-                "stop_loss": latest['Close'] - atr if latest['signal'] == 'LONG' else latest['Close'] + atr,
-                "take_profit": latest['Close'] + (atr * 1.5) if latest['signal'] == 'LONG' else latest['Close'] - (atr * 1.5)
-            }
-            send_discord_notification(current_trade, "Entry", cfg['strategy'])
-
+            entry_price = latest['Close']
+            stop_loss = entry_price - atr if latest['signal'] == 'LONG' else entry_price + atr
+            take_profit = entry_price + (atr * 1.5) if latest['signal'] == 'LONG' else entry_price - (atr * 1.5)
+            trade = {"symbol": cfg['symbol'], "type": latest['signal'], "timeframe": cfg['timeframe'], "entry_price": entry_price, "stop_loss": stop_loss, "take_profit": take_profit}
+            cur.execute("INSERT INTO live_signals (symbol, strategy, timeframe, status, trade_type, entry_price, stop_loss, take_profit, entry_date) VALUES (%s, %s, %s, 'active', %s, %s, %s, %s, NOW());", (cfg['symbol'], cfg['strategy'], cfg['timeframe'], latest['signal'], entry_price, stop_loss, take_profit))
+            conn.commit()
+            send_discord_notification(trade, "Entry", cfg['strategy'])
+            
     except Exception as e:
-        print("--- DETAILED WORKER TRACEBACK ---")
         traceback.print_exc()
-        print("---------------------------------")
-
+    finally:
+        if conn:
+            cur.close()
+            conn.close()
 # --- API ENDPOINTS (NOW ALL IN ONE PLACE) ---
 
 # Endpoints for the Live Monitor
 @app.route('/start', methods=['POST'])
 def start_monitor():
-    global live_monitor_config; config = request.json; live_monitor_config = {"is_running": True, "config": config}; return jsonify({"status": "Live monitor started"})
+    config = request.json; conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE monitor_config SET is_running = TRUE, symbol = %s, strategy = %s, timeframe = %s WHERE id = 1;", (config['symbol'], config['strategy'], config['timeframe']))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    return jsonify({"status": "Live monitor started and persisted"})
 
 @app.route('/stop', methods=['POST'])
 def stop_monitor():
-    global live_monitor_config, current_trade; live_monitor_config = {"is_running": False, "config": None}; current_trade = None; return jsonify({"status": "Live monitor stopped"})
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE monitor_config SET is_running = FALSE WHERE id = 1;")
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    return jsonify({"status": "Live monitor stopped and persisted"})
 
-@app.route('/check-signal')
-def check_signal_route():
-    if live_monitor_config["is_running"]: check_live_trade(); return jsonify({"status": "checked"})
+@app.route('/api/monitor-status', methods=['GET'])
+def get_monitor_status():
+    conn = get_db_connection(); config_data = {}
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;')
+        is_running, symbol, strategy, timeframe = cur.fetchone()
+        config_data = {"isRunning": is_running, "config": {"symbol": symbol, "strategy": strategy, "timeframe": timeframe}}
+    finally:
+        cur.close(); conn.close()
+    return jsonify(config_data)
 
-@app.route('/api/backtest', methods=['POST'])
+@app.route('/api/live-signals', methods=['GET'])
+def get_live_signals():
+    conn = get_db_connection(); signals = []
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, symbol, strategy, timeframe, status, trade_type, entry_price, exit_price, stop_loss, take_profit, entry_date, exit_date, exit_reason FROM live_signals ORDER BY entry_date DESC LIMIT 100;")
+        signals_data = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        signals = [dict(zip(columns, row)) for row in signals_data]
+    finally:
+        cur.close(); conn.close()
+    return jsonify(signals)
 def backtest_route():
     config = request.get_json()
     try:
@@ -293,7 +302,7 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_live_trade, trigger="interval", seconds=60)
 scheduler.start()
 @app.route('/')
-def index(): return "<h1>Trading API (Live + Backtest) is Running</h1>"
+def index(): return "<h1>Trading API v5 (Persistent) is Running</h1>"
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
