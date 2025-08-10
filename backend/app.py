@@ -124,7 +124,8 @@ def check_live_trade():
     if not conn: return
     try:
         cur = conn.cursor(); cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;'); config_row = cur.fetchone()
-        if not (config_row and config_row[0]): return
+        is_running = config_row[0] if config_row else False
+        if not is_running: return
         cfg = {"symbol": config_row[1], "strategy": config_row[2], "timeframe": config_row[3]}
         cur.execute("SELECT id, trade_type, entry_price, stop_loss, take_profit FROM live_signals WHERE status = 'active' ORDER BY entry_date DESC LIMIT 1;"); active_trade_row = cur.fetchone()
         data = yf.Ticker(cfg['symbol']).history(period='5d', interval=cfg['timeframe'], auto_adjust=True)
@@ -151,39 +152,71 @@ def check_live_trade():
     except Exception as e:
         traceback.print_exc()
     finally:
-        if conn: cur.close(); conn.close()
+        if conn: conn.close()
 
 # --- API ENDPOINTS ---
 @app.route('/start', methods=['POST'])
 def start_monitor():
-    config = request.json; conn = get_db_connection()
-    try: cur = conn.cursor(); cur.execute("UPDATE monitor_config SET is_running = TRUE, symbol = %s, strategy = %s, timeframe = %s WHERE id = 1;", (config['symbol'], config['strategy'], config['timeframe'])); conn.commit()
-    finally: cur.close(); conn.close()
+    config = request.json
+    conn = get_db_connection()
+    if not conn: return jsonify({"error": "Database connection failed"}), 500
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE monitor_config SET is_running = TRUE, symbol = %s, strategy = %s, timeframe = %s WHERE id = 1;", (config['symbol'], config['strategy'], config['timeframe']))
+        conn.commit()
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
     return jsonify({"status": "Live monitor started and persisted"})
 
 @app.route('/stop', methods=['POST'])
 def stop_monitor():
     conn = get_db_connection()
-    try: cur = conn.cursor(); cur.execute("UPDATE monitor_config SET is_running = FALSE WHERE id = 1;"); conn.commit()
-    finally: cur.close(); conn.close()
+    if not conn: return jsonify({"error": "Database connection failed"}), 500
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE monitor_config SET is_running = FALSE WHERE id = 1;")
+        conn.commit()
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
     return jsonify({"status": "Live monitor stopped and persisted"})
 
 @app.route('/api/monitor-status', methods=['GET'])
 def get_monitor_status():
-    conn = get_db_connection(); config_data = {}
+    conn = get_db_connection()
+    if not conn: return jsonify({"error": "Database connection failed"}), 500
     try:
-        cur = conn.cursor(); cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;'); is_running, symbol, strategy, timeframe = cur.fetchone()
+        cur = conn.cursor()
+        cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;')
+        is_running, symbol, strategy, timeframe = cur.fetchone()
         config_data = {"isRunning": is_running, "config": {"symbol": symbol, "strategy": strategy, "timeframe": timeframe}}
-    finally: cur.close(); conn.close()
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
     return jsonify(config_data)
 
 @app.route('/api/live-signals', methods=['GET'])
 def get_live_signals():
-    conn = get_db_connection(); signals = []
+    conn = get_db_connection()
+    if not conn: return jsonify({"error": "Database connection failed"}), 500
     try:
-        cur = conn.cursor(); cur.execute("SELECT id, symbol, strategy, timeframe, status, trade_type, entry_price, exit_price, stop_loss, take_profit, entry_date, exit_date, exit_reason FROM live_signals ORDER BY entry_date DESC LIMIT 100;"); signals_data = cur.fetchall(); columns = [desc[0] for desc in cur.description]
+        cur = conn.cursor()
+        cur.execute("SELECT id, symbol, strategy, timeframe, status, trade_type, entry_price, exit_price, stop_loss, take_profit, entry_date, exit_date, exit_reason FROM live_signals ORDER BY entry_date DESC LIMIT 100;")
+        signals_data = cur.fetchall()
+        columns = [desc[0] for desc in cur.description] # This must be done before closing the cursor
         signals = [dict(zip(columns, row)) for row in signals_data]
-    finally: cur.close(); conn.close()
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
     return jsonify(signals)
 
 @app.route('/api/backtest', methods=['POST'])
