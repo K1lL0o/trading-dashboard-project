@@ -122,6 +122,7 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
 def check_live_trade():
     conn = get_db_connection()
     if not conn: return
+    cur = conn.cursor()
     try:
         cur = conn.cursor(); cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;'); config_row = cur.fetchone()
         is_running = config_row[0] if config_row else False
@@ -152,6 +153,7 @@ def check_live_trade():
     except Exception as e:
         traceback.print_exc()
     finally:
+        if cur: cur.close()
         if conn: conn.close()
 
 # --- API ENDPOINTS ---
@@ -160,63 +162,59 @@ def start_monitor():
     config = request.json
     conn = get_db_connection()
     if not conn: return jsonify({"error": "Database connection failed"}), 500
+    cur = conn.cursor()
     try:
-        cur = conn.cursor()
         cur.execute("UPDATE monitor_config SET is_running = TRUE, symbol = %s, strategy = %s, timeframe = %s WHERE id = 1;", (config['symbol'], config['strategy'], config['timeframe']))
         conn.commit()
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        traceback.print_exc(); return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        cur.close(); conn.close()
     return jsonify({"status": "Live monitor started and persisted"})
 
 @app.route('/stop', methods=['POST'])
 def stop_monitor():
     conn = get_db_connection()
     if not conn: return jsonify({"error": "Database connection failed"}), 500
+    cur = conn.cursor()
     try:
-        cur = conn.cursor()
         cur.execute("UPDATE monitor_config SET is_running = FALSE WHERE id = 1;")
         conn.commit()
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        traceback.print_exc(); return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        cur.close(); conn.close()
     return jsonify({"status": "Live monitor stopped and persisted"})
 
 @app.route('/api/monitor-status', methods=['GET'])
 def get_monitor_status():
     conn = get_db_connection()
     if not conn: return jsonify({"error": "Database connection failed"}), 500
+    cur = conn.cursor()
     try:
-        cur = conn.cursor()
         cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;')
         is_running, symbol, strategy, timeframe = cur.fetchone()
         config_data = {"isRunning": is_running, "config": {"symbol": symbol, "strategy": strategy, "timeframe": timeframe}}
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        traceback.print_exc(); return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        cur.close(); conn.close()
     return jsonify(config_data)
 
 @app.route('/api/live-signals', methods=['GET'])
 def get_live_signals():
     conn = get_db_connection()
     if not conn: return jsonify({"error": "Database connection failed"}), 500
+    cur = conn.cursor()
     try:
-        cur = conn.cursor()
         cur.execute("SELECT id, symbol, strategy, timeframe, status, trade_type, entry_price, exit_price, stop_loss, take_profit, entry_date, exit_date, exit_reason FROM live_signals ORDER BY entry_date DESC LIMIT 100;")
         signals_data = cur.fetchall()
-        columns = [desc[0] for desc in cur.description] # This must be done before closing the cursor
+        columns = [desc[0] for desc in cur.description]
         signals = [dict(zip(columns, row)) for row in signals_data]
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        traceback.print_exc(); return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        cur.close(); conn.close()
     return jsonify(signals)
 
 @app.route('/api/backtest', methods=['POST'])
