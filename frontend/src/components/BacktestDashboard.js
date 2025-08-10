@@ -1,9 +1,4 @@
-﻿//
-// 📋 PASTE THIS ENTIRE CODE BLOCK INTO THE FILE: /frontend/src/components/BacktestDashboard.js
-// This is the complete and final version with the upgraded UI and full backtesting logic.
-//
-
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Settings, RefreshCw, TrendingUp, Target, DollarSign, BarChart3, TrendingDown, AlertTriangle } from 'lucide-react';
 
@@ -13,23 +8,15 @@ const validPeriods = {
     '15m': [{ value: '7d', label: '7 Days' }, { value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days (Max)' }],
     '30m': [{ value: '7d', label: '7 Days' }, { value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days (Max)' }],
     '60m': [{ value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days' }, { value: '6mo', label: '6 Months' }, { value: '1y', label: '1 Year' }, { value: '2y', label: '2 Years (Max)' },],
+    '4h': [{ value: '30d', label: '30 Days' }, { value: '60d', label: '60 Days' }, { value: '6mo', label: '6 Months' }, { value: '1y', label: '1 Year' }, { value: '2y', label: '2 Years (Max)' },],
     '1d': [{ value: '3mo', label: '3 Months' }, { value: '6mo', label: '6 Months' }, { value: '1y', label: '1 Year' }, { value: '2y', label: '2 Years' }, { value: '5y', label: '5 Years (Max)' }]
 };
 
 const BacktestDashboard = () => {
     const [config, setConfig] = useState({
-        symbol: 'EURUSD=X',
-        timeframe: '60m',
-        period: '6mo',
-        strategy: 'momentum',
-        // Detailed backtest parameters matching the original logic
-        initialCapital: 10000,
-        riskPerTrade: 2.0,
-        maxTradesPerDay: 5,
-        atrMultiplier: 1.0,
-        targetMultiplier: 2.5,
-        slippage: 1.5,
-        commission: 4.00
+        symbol: 'EURUSD=X', timeframe: '60m', period: '6mo', strategy: 'momentum',
+        initialCapital: 10000, riskPerTrade: 2.0, maxTradesPerDay: 5,
+        atrMultiplier: 1.0, targetMultiplier: 2.5, slippage: 1.5, commission: 4.00
     });
     const [performance, setPerformance] = useState(null);
     const [trades, setTrades] = useState([]);
@@ -37,7 +24,6 @@ const BacktestDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Effect to ensure the selected period is always valid
     useEffect(() => {
         const availablePeriods = validPeriods[config.timeframe];
         const isCurrentPeriodValid = availablePeriods.some(p => p.value === config.period);
@@ -46,7 +32,6 @@ const BacktestDashboard = () => {
         }
     }, [config.timeframe]);
 
-    // Effect that runs the backtest
     useEffect(() => {
         const runBacktest = async () => {
             setLoading(true);
@@ -56,9 +41,8 @@ const BacktestDashboard = () => {
             setChartData([]);
             try {
                 const backendUrl = process.env.REACT_APP_RENDER_WORKER_URL;
-                if (!backendUrl) {
-                    throw new Error("Render worker URL is not configured in environment variables.");
-                }
+                if (!backendUrl) throw new Error("Render worker URL is not configured in environment variables.");
+
                 const response = await fetch(`${backendUrl}/api/backtest`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -67,9 +51,14 @@ const BacktestDashboard = () => {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Backtest failed');
 
-                setPerformance(data.performance);
-                setTrades(data.trades);
-                setChartData(data.chartData.map(d => ({ ...d, time: new Date(d.time).toLocaleDateString() })));
+                if (data.error && !data.performance) {
+                    setError(data.error);
+                } else {
+                    setPerformance(data.performance);
+                    setTrades(data.trades);
+                    setChartData(data.chartData.map(d => ({ ...d, time: new Date(d.time).toLocaleDateString() })));
+                }
+
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -79,6 +68,7 @@ const BacktestDashboard = () => {
         const handler = setTimeout(() => { runBacktest(); }, 500);
         return () => clearTimeout(handler);
     }, [config]);
+
 
     return (
         <div>
