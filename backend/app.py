@@ -229,10 +229,17 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
     return {"trades": trades, "performance": {"totalReturn": round(total_return, 2), "winRate": round(win_rate, 2), "profitFactor": round(profit_factor, 2), "totalTrades": len(trades), "avgWin": round(total_profit/len(wins) if wins else 0, 2), "avgLoss": round(total_loss/len(losses) if losses else 0, 2), "maxDrawdown": round(max_drawdown*100, 2), "finalCapital": round(capital, 2)}}
 
 # --- THE NEW DATABASE-DRIVEN WORKER LOGIC ---
-def check_live_trade():
-   print(f"--- Worker running. Checking {len(WATCHLIST)} configurations. ---")
-   for config in WATCHLIST:
-        process_single_config(config)
+
+def check_all_signals():
+    """The main scheduler job. Loops through the watchlist."""
+    print(f"--- Worker running. Checking {len(WATCHLIST)} configurations. ---")
+    for config in WATCHLIST:
+        try:
+            process_single_config(config)
+        except Exception as e:
+            print(f"--- ERROR processing config {config} ---")
+            traceback.print_exc()
+            print("------------------------------------")
 
 def process_single_config(cfg):
     conn = get_db_connection()
@@ -278,52 +285,9 @@ def process_single_config(cfg):
         if conn: cur.close(); conn.close()
 
 # --- API ENDPOINTS ---
-@app.route('/start', methods=['POST'])
-def start_monitor():
-    config = request.json
-    conn = get_db_connection()
-    if not conn: return jsonify({"error": "Database connection failed"}), 500
-    cur = conn.cursor()
-    try:
-        cur.execute("UPDATE monitor_config SET is_running = TRUE, symbol = %s, strategy = %s, timeframe = %s WHERE id = 1;", (config['symbol'], config['strategy'], config['timeframe']))
-        conn.commit()
-    except Exception as e:
-        traceback.print_exc(); return jsonify({"error": str(e)}), 500
-    finally:
-        cur.close(); conn.close()
-    return jsonify({"status": "Live monitor started and persisted"})
-
-@app.route('/stop', methods=['POST'])
-def stop_monitor():
-    conn = get_db_connection()
-    if not conn: return jsonify({"error": "Database connection failed"}), 500
-    cur = conn.cursor()
-    try:
-        cur.execute("UPDATE monitor_config SET is_running = FALSE WHERE id = 1;")
-        conn.commit()
-    except Exception as e:
-        traceback.print_exc(); return jsonify({"error": str(e)}), 500
-    finally:
-        cur.close(); conn.close()
-    return jsonify({"status": "Live monitor stopped and persisted"})
-
-@app.route('/api/monitor-status', methods=['GET'])
-def get_monitor_status():
-    conn = get_db_connection()
-    if not conn: return jsonify({"error": "Database connection failed"}), 500
-    cur = conn.cursor()
-    try:
-        cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;')
-        is_running, symbol, strategy, timeframe = cur.fetchone()
-        config_data = {"isRunning": is_running, "config": {"symbol": symbol, "strategy": strategy, "timeframe": timeframe}}
-    except Exception as e:
-        traceback.print_exc(); return jsonify({"error": str(e)}), 500
-    finally:
-        cur.close(); conn.close()
-    return jsonify(config_data)
-
 @app.route('/api/live-signals', methods=['GET'])
 def get_live_signals():
+    # (This function is unchanged and correct)
     conn = get_db_connection(); signals = []
     try:
         cur = conn.cursor()
@@ -340,6 +304,7 @@ def get_live_signals():
 
 @app.route('/api/backtest', methods=['POST'])
 def backtest_route():
+    # (This function is unchanged and correct)
     config = request.get_json()
     try:
         ticker = yf.Ticker(config['symbol'])
