@@ -24,34 +24,26 @@ DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 WATCHLIST = [
     # --- Forex ---
     # EUR/USD
-    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "5m"},
     {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "15m"},
-    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "30m"},
     {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "60m"},
     {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "4h"},
     {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "1d"},
 
-    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "5m"},
-    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "15m"},
-    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "30m"},
     {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "60m"},
     {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "4h"},
     {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "1d"},
 
     # GBP/USD
-    {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "5m"},
     {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "15m"},
     {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "30m"},
     {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "60m"},
     {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "4h"},
     {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "1d"},
 
-    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "5m"},
     {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "15m"},
     {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "30m"},
     {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "60m"},
     {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "4h"},
-    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "1d"},
 
     # USD/JPY
     {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "5m"},
@@ -59,7 +51,6 @@ WATCHLIST = [
     {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "30m"},
     {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "60m"},
     {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "4h"},
-    {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "1d"},
 
     {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "5m"},
     {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "15m"},
@@ -69,29 +60,16 @@ WATCHLIST = [
     {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "1d"},
 
     # AUD/USD
-    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "5m"},
-    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "15m"},
-    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "30m"},
     {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "60m"},
     {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "4h"},
-    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "1d"},
 
-    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "5m"},
-    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "15m"},
-    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "30m"},
-    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "60m"},
-    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "4h"},
-    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "1d"},
 
     # USD/CAD
-    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "5m"},
     {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "15m"},
     {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "30m"},
     {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "60m"},
     {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "4h"},
-    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "1d"},
 
-    {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "5m"},
     {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "15m"},
     {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "30m"},
     {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "60m"},
@@ -185,9 +163,11 @@ def generate_signals(df, strategy_name):
 # --- ADVANCED BACKTESTING ENGINE ---
 def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_day, atr_multiplier, target_multiplier, slippage_pips, commission_per_trade):
     trades, capital, peak_capital, max_drawdown, position, daily_trade_count, slippage, warmup_period = [], initial_capital, initial_capital, 0.0, None, {}, slippage_pips * 0.0001, 50
+    equity_curve = []
     for i in range(warmup_period, len(df)):
         current, prev = df.iloc[i], df.iloc[i-1]
         current_date = current['time'].date()
+        equity_curve.append({'time': current['time'], 'capital': capital})
         if current_date not in daily_trade_count: daily_trade_count[current_date] = 0
         if position:
             exit_reason, exit_price = None, 0.0
@@ -226,7 +206,7 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
     wins = [t for t in trades if t['pnl'] > 0]; losses = [t for t in trades if t['pnl'] <= 0]
     win_rate = (len(wins) / len(trades)) * 100 if trades else 0; total_profit = sum(t['pnl'] for t in wins); total_loss = abs(sum(t['pnl'] for t in losses))
     profit_factor = total_profit / total_loss if total_loss > 0 else 999
-    return {"trades": trades, "performance": {"totalReturn": round(total_return, 2), "winRate": round(win_rate, 2), "profitFactor": round(profit_factor, 2), "totalTrades": len(trades), "avgWin": round(total_profit/len(wins) if wins else 0, 2), "avgLoss": round(total_loss/len(losses) if losses else 0, 2), "maxDrawdown": round(max_drawdown*100, 2), "finalCapital": round(capital, 2)}}
+    return {"trades": trades, "performance": {"totalReturn": round(total_return, 2), "winRate": round(win_rate, 2), "profitFactor": round(profit_factor, 2), "totalTrades": len(trades), "avgWin": round(total_profit/len(wins) if wins else 0, 2), "avgLoss": round(total_loss/len(losses) if losses else 0, 2), "maxDrawdown": round(max_drawdown*100, 2), "finalCapital": round(capital, 2)}, "equityCurve": equity_curve}
 
 # --- THE NEW DATABASE-DRIVEN WORKER LOGIC ---
 
@@ -317,7 +297,7 @@ def backtest_route():
         results = run_backtest_simulation(signals_df, float(config.get('initialCapital', 10000)), float(config.get('riskPerTrade', 2.0)), int(config.get('maxTradesPerDay', 5)), float(config.get('atrMultiplier', 1.0)), float(config.get('targetMultiplier', 2.5)), float(config.get('slippage', 1.5)), float(config.get('commission', 4.0)))
         if "error" in results: return jsonify({ "performance": results.get('performance'), "trades": [], "chartData": [], "error": results['error'] }), 200
         chart_data = signals_df.tail(300).to_dict('records')
-        return jsonify({"performance": results['performance'], "trades": results['trades'], "chartData": chart_data}), 200
+        return jsonify({"performance": results['performance'], "trades": results['trades'],"equityCurve": results['equityCurve'], "chartData": chart_data}), 200
     except Exception as e:
         traceback.print_exc(); return jsonify({"error": f"Backend error: {str(e)}"}), 500
 

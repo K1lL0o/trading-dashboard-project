@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts'; // <-- Added AreaChart and Area
 import { Settings, RefreshCw, TrendingUp, Target, DollarSign, BarChart3, TrendingDown, AlertTriangle } from 'lucide-react';
 
 const validPeriods = {
@@ -18,6 +18,7 @@ const BacktestDashboard = () => {
         initialCapital: 10000, riskPerTrade: 2.0, maxTradesPerDay: 5,
         atrMultiplier: 1.0, targetMultiplier: 2.5, slippage: 1.5, commission: 4.00
     });
+    const [equityCurveData, setEquityCurveData] = useState([]); // <-- NEW STATE for equity curve
     const [performance, setPerformance] = useState(null);
     const [trades, setTrades] = useState([]);
     const [chartData, setChartData] = useState([]);
@@ -39,6 +40,7 @@ const BacktestDashboard = () => {
             setPerformance(null);
             setTrades([]);
             setChartData([]);
+            setEquityCurveData([]);
             try {
                 const backendUrl = process.env.REACT_APP_RENDER_WORKER_URL;
                 if (!backendUrl) throw new Error("Render worker URL is not configured in environment variables.");
@@ -56,7 +58,10 @@ const BacktestDashboard = () => {
                 } else {
                     setPerformance(data.performance);
                     setTrades(data.trades);
-                    setChartData(data.chartData.map(d => ({ ...d, time: new Date(d.time).toLocaleDateString() })));
+                    setEquityCurveData(data.equityCurve.map(d => ({
+                        ...d,
+                        time: new Date(d.time).toLocaleDateString()
+                    })));
                 }
 
             } catch (err) {
@@ -166,20 +171,27 @@ const BacktestDashboard = () => {
                 </section>
             )}
 
-            {chartData.length > 0 && !loading && (
+            {equityCurveData.length > 0 && !loading && (
                 <section className="grid grid-cols-1 mb-8">
                     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6 min-h-[400px]">
-                        <h3 className="text-lg font-semibold mb-4 text-blue-400">Backtest Chart</h3>
+                        <h3 className="text-lg font-semibold mb-4 text-blue-400">Equity Curve</h3>
                         <ResponsiveContainer width="100%" height={320}>
-                            <LineChart data={chartData}>
+                            <AreaChart data={equityCurveData}>
+                                <defs>
+                                    <linearGradient id="colorCapital" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                 <XAxis dataKey="time" stroke="#9CA3AF" fontSize={12} />
                                 <YAxis stroke="#9CA3AF" fontSize={12} domain={['auto', 'auto']} allowDataOverflow={true} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }} />
-                                <Legend />
-                                <Line dataKey="Close" stroke="#3B82F6" strokeWidth={2} dot={false} name="Price" />
-                                <Line dataKey="EMA_20" stroke="#F59E0B" strokeWidth={1} dot={false} name="EMA 20" />
-                            </LineChart>
+                                <Tooltip
+                                    formatter={(value) => `$${value.toFixed(2)}`}
+                                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                />
+                                <Area type="monotone" dataKey="capital" stroke="#3B82F6" fillOpacity={1} fill="url(#colorCapital)" name="Capital" />
+                            </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </section>
