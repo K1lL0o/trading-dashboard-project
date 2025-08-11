@@ -21,6 +21,116 @@ CORS(app, origins=["https://killo.online", "https://trading-dashboard-project.ve
 DATABASE_URL = os.getenv('DATABASE_URL')
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 
+WATCHLIST = [
+    # --- Forex ---
+    # EUR/USD
+    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "5m"},
+    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "15m"},
+    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "30m"},
+    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "60m"},
+    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "4h"},
+    {"symbol": "EURUSD=X", "strategy": "momentum", "timeframe": "1d"},
+
+    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "5m"},
+    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "15m"},
+    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "30m"},
+    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "60m"},
+    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "4h"},
+    {"symbol": "EURUSD=X", "strategy": "scalping", "timeframe": "1d"},
+
+    # GBP/USD
+    {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "5m"},
+    {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "15m"},
+    {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "30m"},
+    {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "60m"},
+    {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "4h"},
+    {"symbol": "GBPUSD=X", "strategy": "momentum", "timeframe": "1d"},
+
+    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "5m"},
+    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "15m"},
+    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "30m"},
+    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "60m"},
+    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "4h"},
+    {"symbol": "GBPUSD=X", "strategy": "scalping", "timeframe": "1d"},
+
+    # USD/JPY
+    {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "5m"},
+    {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "15m"},
+    {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "30m"},
+    {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "60m"},
+    {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "4h"},
+    {"symbol": "USDJPY=X", "strategy": "momentum", "timeframe": "1d"},
+
+    {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "5m"},
+    {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "15m"},
+    {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "30m"},
+    {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "60m"},
+    {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "4h"},
+    {"symbol": "USDJPY=X", "strategy": "scalping", "timeframe": "1d"},
+
+    # AUD/USD
+    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "5m"},
+    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "15m"},
+    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "30m"},
+    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "60m"},
+    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "4h"},
+    {"symbol": "AUDUSD=X", "strategy": "momentum", "timeframe": "1d"},
+
+    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "5m"},
+    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "15m"},
+    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "30m"},
+    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "60m"},
+    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "4h"},
+    {"symbol": "AUDUSD=X", "strategy": "scalping", "timeframe": "1d"},
+
+    # USD/CAD
+    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "5m"},
+    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "15m"},
+    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "30m"},
+    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "60m"},
+    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "4h"},
+    {"symbol": "USDCAD=X", "strategy": "momentum", "timeframe": "1d"},
+
+    {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "5m"},
+    {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "15m"},
+    {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "30m"},
+    {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "60m"},
+    {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "4h"},
+    {"symbol": "USDCAD=X", "strategy": "scalping", "timeframe": "1d"},
+
+    # --- Crypto ---
+    # BTC/USD
+    {"symbol": "BTC-USD", "strategy": "momentum", "timeframe": "5m"},
+    {"symbol": "BTC-USD", "strategy": "momentum", "timeframe": "15m"},
+    {"symbol": "BTC-USD", "strategy": "momentum", "timeframe": "30m"},
+    {"symbol": "BTC-USD", "strategy": "momentum", "timeframe": "60m"},
+    {"symbol": "BTC-USD", "strategy": "momentum", "timeframe": "4h"},
+    {"symbol": "BTC-USD", "strategy": "momentum", "timeframe": "1d"},
+
+    {"symbol": "BTC-USD", "strategy": "scalping", "timeframe": "5m"},
+    {"symbol": "BTC-USD", "strategy": "scalping", "timeframe": "15m"},
+    {"symbol": "BTC-USD", "strategy": "scalping", "timeframe": "30m"},
+    {"symbol": "BTC-USD", "strategy": "scalping", "timeframe": "60m"},
+    {"symbol": "BTC-USD", "strategy": "scalping", "timeframe": "4h"},
+    {"symbol": "BTC-USD", "strategy": "scalping", "timeframe": "1d"},
+
+    # ETH/USD
+    {"symbol": "ETH-USD", "strategy": "momentum", "timeframe": "5m"},
+    {"symbol": "ETH-USD", "strategy": "momentum", "timeframe": "15m"},
+    {"symbol": "ETH-USD", "strategy": "momentum", "timeframe": "30m"},
+    {"symbol": "ETH-USD", "strategy": "momentum", "timeframe": "60m"},
+    {"symbol": "ETH-USD", "strategy": "momentum", "timeframe": "4h"},
+    {"symbol": "ETH-USD", "strategy": "momentum", "timeframe": "1d"},
+
+    {"symbol": "ETH-USD", "strategy": "scalping", "timeframe": "5m"},
+    {"symbol": "ETH-USD", "strategy": "scalping", "timeframe": "15m"},
+    {"symbol": "ETH-USD", "strategy": "scalping", "timeframe": "30m"},
+    {"symbol": "ETH-USD", "strategy": "scalping", "timeframe": "60m"},
+    {"symbol": "ETH-USD", "strategy": "scalping", "timeframe": "4h"},
+    {"symbol": "ETH-USD", "strategy": "scalping", "timeframe": "1d"},
+]
+
+
 def get_db_connection():
     try:
         conn = psycopg2.connect(DATABASE_URL)
@@ -120,19 +230,25 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
 
 # --- THE NEW DATABASE-DRIVEN WORKER LOGIC ---
 def check_live_trade():
+   print(f"--- Worker running. Checking {len(WATCHLIST)} configurations. ---")
+   for config in WATCHLIST:
+        process_single_config(config)
+
+def process_single_config(cfg):
     conn = get_db_connection()
     if not conn: return
     cur = conn.cursor()
     try:
-        cur = conn.cursor(); cur.execute('SELECT is_running, symbol, strategy, timeframe FROM monitor_config WHERE id = 1;'); config_row = cur.fetchone()
-        is_running = config_row[0] if config_row else False
-        if not is_running: return
-        cfg = {"symbol": config_row[1], "strategy": config_row[2], "timeframe": config_row[3]}
-        cur.execute("SELECT id, trade_type, entry_price, stop_loss, take_profit FROM live_signals WHERE status = 'active' ORDER BY entry_date DESC LIMIT 1;"); active_trade_row = cur.fetchone()
+        cur.execute("SELECT id, trade_type, entry_price, stop_loss, take_profit FROM live_signals WHERE status = 'active' AND symbol = %s AND strategy = %s AND timeframe = %s ORDER BY entry_date DESC LIMIT 1;", (cfg['symbol'], cfg['strategy'], cfg['timeframe']))
+        active_trade_row = cur.fetchone()
+        
         data = yf.Ticker(cfg['symbol']).history(period='5d', interval=cfg['timeframe'], auto_adjust=True)
         if data.empty: return
-        clean_df = clean_yfinance_data(data); signals_df = generate_signals(clean_df, cfg['strategy'])
+
+        clean_df = clean_yfinance_data(data)
+        signals_df = generate_signals(clean_df, cfg['strategy'])
         latest, prev = signals_df.iloc[-1], signals_df.iloc[-2]
+
         if active_trade_row:
             trade_id, trade_type, entry_price, stop_loss, take_profit = active_trade_row
             exit_reason, exit_price = None, None
@@ -141,20 +257,25 @@ def check_live_trade():
             elif trade_type == 'SHORT' and latest['Close'] <= take_profit: exit_reason, exit_price = "Take Profit", latest['Close']
             elif trade_type == 'SHORT' and latest['Close'] >= stop_loss: exit_reason, exit_price = "Stop Loss", latest['Close']
             if exit_reason:
-                cur.execute("UPDATE live_signals SET status = 'closed', exit_price = %s, exit_date = NOW(), exit_reason = %s WHERE id = %s;", (exit_price, exit_reason, trade_id)); conn.commit()
+                cur.execute("UPDATE live_signals SET status = 'closed', exit_price = %s, exit_date = NOW(), exit_reason = %s WHERE id = %s;", (exit_price, exit_reason, trade_id))
+                conn.commit()
                 send_discord_notification({"symbol": cfg['symbol'], "type": trade_type, "timeframe": cfg['timeframe'], "entry_price": entry_price, "exit_price": exit_price}, exit_reason, cfg['strategy'])
+        
         elif not active_trade_row and prev['signal'] == 'STAY_OUT' and latest['signal'] != 'STAY_OUT':
             atr = latest['BBU_20_2.0'] - latest['BBL_20_2.0']
             if pd.isna(atr) or atr == 0: return
-            entry_price = latest['Close']; stop_loss = entry_price - atr if latest['signal'] == 'LONG' else entry_price + atr; take_profit = entry_price + (atr * 1.5) if latest['signal'] == 'LONG' else entry_price - (atr * 1.5)
+            entry_price = latest['Close']
+            stop_loss = entry_price - atr if latest['signal'] == 'LONG' else entry_price + atr
+            take_profit = entry_price + (atr * 1.5) if latest['signal'] == 'LONG' else entry_price - (atr * 1.5)
             trade = {"symbol": cfg['symbol'], "type": latest['signal'], "timeframe": cfg['timeframe'], "entry_price": entry_price, "stop_loss": stop_loss, "take_profit": take_profit}
-            cur.execute("INSERT INTO live_signals (symbol, strategy, timeframe, status, trade_type, entry_price, stop_loss, take_profit, entry_date) VALUES (%s, %s, %s, 'active', %s, %s, %s, %s, NOW());", (cfg['symbol'], cfg['strategy'], cfg['timeframe'], latest['signal'], entry_price, stop_loss, take_profit)); conn.commit()
+            cur.execute("INSERT INTO live_signals (symbol, strategy, timeframe, status, trade_type, entry_price, stop_loss, take_profit, entry_date) VALUES (%s, %s, %s, 'active', %s, %s, %s, %s, NOW());", (cfg['symbol'], cfg['strategy'], cfg['timeframe'], latest['signal'], entry_price, stop_loss, take_profit))
+            conn.commit()
             send_discord_notification(trade, "Entry", cfg['strategy'])
+            
     except Exception as e:
         traceback.print_exc()
     finally:
-        if cur: cur.close()
-        if conn: conn.close()
+        if conn: cur.close(); conn.close()
 
 # --- API ENDPOINTS ---
 @app.route('/start', methods=['POST'])
@@ -203,10 +324,7 @@ def get_monitor_status():
 
 @app.route('/api/live-signals', methods=['GET'])
 def get_live_signals():
-    conn = get_db_connection()
-    if not conn: return jsonify({"error": "Database connection failed"}), 500
-
-    signals = []
+    conn = get_db_connection(); signals = []
     try:
         cur = conn.cursor()
         cur.execute("SELECT id, symbol, strategy, timeframe, status, trade_type, entry_price, exit_price, stop_loss, take_profit, entry_date, exit_date, exit_reason FROM live_signals ORDER BY entry_date DESC LIMIT 100;")
@@ -217,7 +335,7 @@ def get_live_signals():
     except Exception as e:
         traceback.print_exc(); return jsonify({"error": str(e)}), 500
     finally:
-        cur.close(); conn.close()
+        if conn: cur.close(); conn.close()
     return jsonify(signals)
 
 @app.route('/api/backtest', methods=['POST'])
@@ -240,10 +358,10 @@ def backtest_route():
 
 # --- SCHEDULER & MAIN BLOCK ---
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=check_live_trade, trigger="interval", seconds=60)
+scheduler.add_job(func=check_all_signals, trigger="interval", seconds=60)
 scheduler.start()
 @app.route('/')
-def index(): return "<h1>Trading API (Persistent & Consolidated) is Running</h1>"
+def index(): return "<h1>24/7 Watchlist Worker is Running</h1>"
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
