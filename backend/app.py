@@ -213,18 +213,13 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
     return {"trades": trades, "performance": {"totalReturn": round(total_return, 2), "winRate": round(win_rate, 2), "profitFactor": round(profit_factor, 2), "totalTrades": len(trades), "avgWin": round(total_profit/len(wins) if wins else 0, 2), "avgLoss": round(total_loss/len(losses) if losses else 0, 2), "maxDrawdown": round(max_drawdown*100, 2), "finalCapital": round(capital, 2)}, "equityCurve": equity_curve}
 
 # --- WATCHLIST WORKER LOGIC (WITH CORRECTED LOWERCASE COLUMN NAMES) ---
-def check_all_signals():
-    print(f"--- Worker running. Checking {len(WATCHLIST)} configurations. ---")
-    for config in WATCHLIST:
-        try: process_single_config(config)
-        except Exception as e: print(f"--- ERROR processing config {config} ---"); traceback.print_exc()
 
 def process_single_config(cfg):
     conn = get_db_connection();
     if not conn: return
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, trade_type, entry_price, stop_loss, take_profit FROM live_signals WHERE status = 'active' AND symbol = %s AND strategy = %s AND timeframe = %s ORDER BY entry_date DESC LIMIT 1;", (cfg['symbol'], cfg['strategy'], cfg['timeframe']))
+        cur.execute("SELECT id FROM live_signals WHERE status = 'active' AND symbol = %s AND strategy = %s AND timeframe = %s LIMIT 1;", (cfg['symbol'], cfg['strategy'], cfg['timeframe']))
         active_trade_row = cur.fetchone()
         data = yf.Ticker(cfg['symbol']).history(period='5d', interval=cfg['timeframe'], auto_adjust=True)
         if data.empty: return
@@ -251,6 +246,16 @@ def process_single_config(cfg):
         traceback.print_exc()
     finally:
         if conn: cur.close(); conn.close()
+
+def check_all_signals():
+    """The main scheduler job. Loops through the watchlist."""
+    print(f"--- Worker running. Checking {len(WATCHLIST)} configurations. ---")
+    for config in WATCHLIST:
+        try:
+            process_single_config(config) # This will now work
+        except Exception as e:
+            print(f"--- ERROR processing config {config} ---")
+            traceback.print_exc()
 
 # --- API ENDPOINTS ---
 @app.route('/api/live-signals', methods=['GET'])
