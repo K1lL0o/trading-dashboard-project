@@ -303,38 +303,53 @@ def backtest_route():
 
 @app.route('/api/get-latest-signal', methods=['GET'])
 def get_latest_signal():
-    # Check for the secret API key in the request headers
     provided_key = request.headers.get('X-API-KEY')
     correct_key = os.getenv('TRADING_BOT_API_KEY')
+    print(f"--- Received request on /api/get-latest-signal at {datetime.now()} ---") # New Log
 
     if not provided_key or provided_key != correct_key:
-        return jsonify({"error": "Unauthorized"}), 401 # 401 Unauthorized error
+        print("   -> Unauthorized: Incorrect or missing API key.")
+        return jsonify({"error": "Unauthorized"}), 401
 
     conn = get_db_connection()
-    if not conn: return jsonify({"error": "Database connection failed"}), 500
+    if not conn:
+        print("   -> Error: Could not connect to the database.")
+        return jsonify({"error": "Database connection failed"}), 500
     
     signal = None
     try:
         cur = conn.cursor()
-        # Get the most recent trade that was opened in the last 2 minutes
+        # Get the single most recent 'active' trade, regardless of which watchlist item it came from.
+        # It must have been created in the last 2 minutes to be considered "new".
         cur.execute("""
             SELECT symbol, strategy, timeframe, trade_type, entry_price, stop_loss, take_profit, entry_date
             FROM live_signals 
-            WHERE entry_date >= NOW() - INTERVAL '2 minutes'
+            WHERE status = 'active' AND entry_date >= NOW() - INTERVAL '2 minutes'
             ORDER BY entry_date DESC 
             LIMIT 1;
         """)
         trade_data = cur.fetchone()
+        
         if trade_data:
             columns = [desc[0] for desc in cur.description]
             signal = dict(zip(columns, trade_data))
+            if signal and 'entry_date' in signal:
+                signal['entry_date'] = signal['entry_date'].isoformat()
+            print(f"   -> Found new signal: {signal}") # New Log
+        else:
+            print("   -> No new active signals found in the last 2 minutes.") # New Log
+
     except Exception as e:
+        print("--- DETAILED TRACEBACK for /api/get-latest-signal ---")
         traceback.print_exc()
+        print("----------------------------------------------------")
         return jsonify({"error": str(e)}), 500
     finally:
-        if conn: cur.close(); conn.close()
+        if conn:
+            cur.close()
+            conn.close()
         
-    return jsonify(signal) # Will return the signal or null if none is new
+    return jsonify(signal)
 
 # --- SCHEDULER & MAIN BLOCK ---
 scheduler = BackgroundScheduler()
