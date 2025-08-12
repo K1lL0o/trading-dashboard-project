@@ -301,6 +301,41 @@ def backtest_route():
     except Exception as e:
         traceback.print_exc(); return jsonify({"error": f"Backend error: {str(e)}"}), 500
 
+@app.route('/api/get-latest-signal', methods=['GET'])
+def get_latest_signal():
+    # Check for the secret API key in the request headers
+    provided_key = request.headers.get('X-API-KEY')
+    correct_key = os.getenv('TRADING_BOT_API_KEY')
+
+    if not provided_key or provided_key != correct_key:
+        return jsonify({"error": "Unauthorized"}), 401 # 401 Unauthorized error
+
+    conn = get_db_connection()
+    if not conn: return jsonify({"error": "Database connection failed"}), 500
+    
+    signal = None
+    try:
+        cur = conn.cursor()
+        # Get the most recent trade that was opened in the last 2 minutes
+        cur.execute("""
+            SELECT symbol, strategy, timeframe, trade_type, entry_price, stop_loss, take_profit, entry_date
+            FROM live_signals 
+            WHERE entry_date >= NOW() - INTERVAL '2 minutes'
+            ORDER BY entry_date DESC 
+            LIMIT 1;
+        """)
+        trade_data = cur.fetchone()
+        if trade_data:
+            columns = [desc[0] for desc in cur.description]
+            signal = dict(zip(columns, trade_data))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn: cur.close(); conn.close()
+        
+    return jsonify(signal) # Will return the signal or null if none is new
+
 # --- SCHEDULER & MAIN BLOCK ---
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_all_signals, trigger="interval", seconds=60)
