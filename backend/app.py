@@ -137,31 +137,50 @@ def send_discord_notification(trade_details, reason, strategy_name):
 
 # --- ROBUST DATA CLEANING FUNCTION ---
 def clean_yfinance_data(df):
-    date_col_name = df.index.name or 'index'
+    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
     df = df.reset_index()
     df.columns = [col.lower() for col in df.columns]
-    df.rename(columns={date_col_name.lower(): 'time'}, inplace=True)
+    # Reliably find and rename the date column
+    date_col_name = 'index'
+    if 'date' in df.columns: date_col_name = 'date'
+    if 'datetime' in df.columns: date_col_name = 'datetime'
+    df.rename(columns={date_col_name: 'time'}, inplace=True)
     return df
 
 def generate_signals(df, strategy_name):
-    df.ta.ema(length=5, append=True, close='close'); df.ta.ema(length=10, append=True, close='close'); df.ta.ema(length=20, append=True, close='close'); df.ta.ema(length=50, append=True, close='close')
-    df.ta.rsi(length=7, append=True, close='close'); df.ta.rsi(length=14, append=True, close='close'); df.ta.bbands(length=20, append=True, close='close')
-    df.ta.macd(fast=12, slow=26, signal=9, append=True, close='close')
-    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('macd_5_12_3', 'macdh_5_12_3', 'macds_5_12_3'), close='close')
+    # Explicitly tell pandas_ta which column to use for all calculations
+    df.ta.ema(close=df['close'], length=5, append=True)
+    df.ta.ema(close=df['close'], length=10, append=True)
+    df.ta.ema(close=df['close'], length=20, append=True)
+    df.ta.ema(close=df['close'], length=50, append=True)
+    df.ta.rsi(close=df['close'], length=7, append=True)
+    df.ta.rsi(close=df['close'], length=14, append=True)
+    df.ta.bbands(close=df['close'], length=20, append=True)
+    df.ta.macd(close=df['close'], fast=12, slow=26, signal=9, append=True)
+    df.ta.macd(close=df['close'], fast=5, slow=12, signal=3, append=True, col_names=('macd_5_12_3', 'macdh_5_12_3', 'macds_5_12_3'))
+    
+    # Force all resulting columns to lowercase again to be safe
     df.columns = [col.lower() for col in df.columns]
-    df['signal'] = 'STAY_OUT'
+
+    # Use a safe method to initialize the signal column
+    df = df.assign(signal='STAY_OUT')
+    
     if strategy_name == 'momentum':
         long_conditions = ((df['rsi_14'] > 60) & (df['rsi_7'] > 65) & (df['ema_5'] > df['ema_10']) & (df['ema_10'] > df['ema_20']) & (df['ema_20'] > df['ema_50']) & (df['macd_12_26_9'] > df['macds_12_26_9']))
         short_conditions = ((df['rsi_14'] < 40) & (df['rsi_7'] < 35) & (df['ema_5'] < df['ema_10']) & (df['ema_10'] < df['ema_20']) & (df['ema_20'] < df['ema_50']) & (df['macd_12_26_9'] < df['macds_12_26_9']))
-        df.loc[long_conditions, 'signal'] = 'LONG'; df.loc[short_conditions, 'signal'] = 'SHORT'
+        df.loc[long_conditions, 'signal'] = 'LONG'
+        df.loc[short_conditions, 'signal'] = 'SHORT'
     elif strategy_name == 'scalping':
-        long_score = pd.Series(0, index=df.index); short_score = pd.Series(0, index=df.index)
-        long_score += pd.Series((df['macd_5_12_3'] > df['macds_5_12_3']) & (df['macd_5_12_3'].shift(1) <= df['macds_5_12_3'].shift(1))).astype(int) * 2
-        short_score += pd.Series((df['macd_5_12_3'] < df['macds_5_12_3']) & (df['macd_5_12_3'].shift(1) >= df['macds_5_12_3'].shift(1))).astype(int) * 2
-        long_score += pd.Series(df['rsi_7'] < 35).astype(int); short_score += pd.Series(df['rsi_7'] > 65).astype(int)
-        long_score += pd.Series((df['ema_5'] > df['ema_10']) & (df['ema_10'] > df['ema_20'])).astype(int)
-        short_score += pd.Series((df['ema_5'] < df['ema_10']) & (df['ema_10'] < df['ema_20'])).astype(int)
-        df.loc[long_score >= 3, 'signal'] = 'LONG'; df.loc[short_score >= 3, 'signal'] = 'SHORT'
+        long_score = pd.Series(0, index=df.index)
+        short_score = pd.Series(0, index=df.index)
+        long_score += pd.Series((df['macd_5_12_3'] > df['macds_5_12_3']) & (df['macd_5_12_3'].shift(1) <= df['macds_5_12_3'].shift(1))).fillna(0).astype(int) * 2
+        short_score += pd.Series((df['macd_5_12_3'] < df['macds_5_12_3']) & (df['macd_5_12_3'].shift(1) >= df['macds_5_12_3'].shift(1))).fillna(0).astype(int) * 2
+        long_score += pd.Series(df['rsi_7'] < 35).fillna(0).astype(int)
+        short_score += pd.Series(df['rsi_7'] > 65).fillna(0).astype(int)
+        long_score += pd.Series((df['ema_5'] > df['ema_10']) & (df['ema_10'] > df['ema_20'])).fillna(0).astype(int)
+        short_score += pd.Series((df['ema_5'] < df['ema_10']) & (df['ema_10'] < df['ema_20'])).fillna(0).astype(int)
+        df.loc[long_score >= 3, 'signal'] = 'LONG'
+        df.loc[short_score >= 3, 'signal'] = 'SHORT'
     return df
 
 # --- ADVANCED BACKTESTING ENGINE (WITH CORRECTED LOWERCASE COLUMN NAMES) ---
