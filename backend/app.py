@@ -137,9 +137,21 @@ def send_discord_notification(trade_details, reason, strategy_name):
 
 # --- ROBUST DATA CLEANING FUNCTION ---
 def clean_yfinance_data(df):
-    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
+    """
+    This is the definitive fix. It deterministically finds and standardizes the date column.
+    """
+    # 1. Capture the name of the index (e.g., 'Date', 'Datetime')
+    date_col_name = df.index.name
+
+    # 2. Reset the index, turning the date index into a regular column
     df = df.reset_index()
-    df.columns = [col.lower() for col in df.columns] # Standardize to lowercase
+
+    # 3. Standardize all column names to lowercase
+    df.columns = [col.lower() for col in df.columns]
+
+    # 4. Reliably rename the original index column (now lowercase) to 'time'
+    df.rename(columns={date_col_name.lower(): 'time'}, inplace=True)
+    
     return df
 
 def generate_signals(df, strategy_name):
@@ -271,22 +283,39 @@ def get_live_signals():
 
 @app.route('/api/backtest', methods=['POST'])
 def backtest_route():
-    # (This function is unchanged and correct)
     config = request.get_json()
     try:
         ticker = yf.Ticker(config['symbol'])
         data = ticker.history(period=config['period'], interval=config['timeframe'], auto_adjust=True)
         if data.empty: return jsonify({"error": f"No data for '{config['symbol']}'."}), 404
+        
+        # The new cleaning function handles everything perfectly.
         clean_df = clean_yfinance_data(data)
+        
         signals_df = generate_signals(clean_df, config['strategy'])
-        date_col = 'Datetime' if 'Datetime' in signals_df.columns else 'Date'
-        signals_df.rename(columns={date_col: 'time'}, inplace=True)
-        results = run_backtest_simulation(signals_df, float(config.get('initialCapital', 10000)), float(config.get('riskPerTrade', 2.0)), int(config.get('maxTradesPerDay', 5)), float(config.get('atrMultiplier', 1.0)), float(config.get('targetMultiplier', 2.5)), float(config.get('slippage', 1.5)), float(config.get('commission', 4.0)))
-        if "error" in results: return jsonify({ "performance": results.get('performance'), "trades": [], "chartData": [], "error": results['error'] }), 200
+        
+        # No more guessing is needed here. The column is now guaranteed to be 'time'.
+        results = run_backtest_simulation(
+            signals_df, 
+            float(config.get('initialCapital', 10000)),
+            float(config.get('riskPerTrade', 2.0)),
+            int(config.get('maxTradesPerDay', 5)),
+            float(config.get('atrMultiplier', 1.0)),
+            float(config.get('targetMultiplier', 2.5)),
+            float(config.get('slippage', 1.5)), 
+            float(config.get('commission', 4.0))
+        )
+        
+        if "error" in results: 
+            return jsonify({ "performance": results.get('performance'), "trades": [], "equityCurve": results['equityCurve'], "error": results['error'] }), 200
+        
+        # The chart data now also uses the guaranteed 'time' column
         chart_data = signals_df.tail(300).to_dict('records')
-        return jsonify({"performance": results['performance'], "trades": results['trades'],"equityCurve": results['equityCurve'], "chartData": chart_data}), 200
+        return jsonify({"performance": results['performance'], "trades": results['trades'], "chartData": chart_data, "equityCurve": results['equityCurve']}), 200
+        
     except Exception as e:
-        traceback.print_exc(); return jsonify({"error": f"Backend error: {str(e)}"}), 500
+        traceback.print_exc()
+        return jsonify({"error": f"A critical backend error occurred: {str(e)}"}), 500
 
 @app.route('/api/get-latest-signal', methods=['GET'])
 def get_latest_signal():
