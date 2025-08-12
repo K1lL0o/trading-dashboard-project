@@ -137,21 +137,10 @@ def send_discord_notification(trade_details, reason, strategy_name):
 
 # --- ROBUST DATA CLEANING FUNCTION ---
 def clean_yfinance_data(df):
-    """
-    This is the definitive fix. It deterministically finds and standardizes the date column.
-    """
-    # 1. Capture the name of the index (e.g., 'Date', 'Datetime')
-    date_col_name = df.index.name
-
-    # 2. Reset the index, turning the date index into a regular column
+    date_col_name = df.index.name or 'index'
     df = df.reset_index()
-
-    # 3. Standardize all column names to lowercase
     df.columns = [col.lower() for col in df.columns]
-
-    # 4. Reliably rename the original index column (now lowercase) to 'time'
     df.rename(columns={date_col_name.lower(): 'time'}, inplace=True)
-    
     return df
 
 def generate_signals(df, strategy_name):
@@ -216,7 +205,7 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
             if position_size > 0:
                 daily_trade_count[current_date] += 1
                 position = {'entry_date': current['time'], 'type': current['signal'], 'entry_price': entry_price, 'stop_loss': stop_loss, 'take_profit': take_profit, 'position_size': position_size}
-    if not trades: return {"trades": [], "performance": {"totalReturn": 0, "winRate": 0, "profitFactor": 0, "totalTrades": 0, "avgWin": 0, "avgLoss": 0, "maxDrawdown": 0, "finalCapital": initial_capital}, "error": "No trades were executed."}
+    if not trades: return {"trades": [], "performance": {"totalReturn": 0, "winRate": 0, "profitFactor": 0, "totalTrades": 0, "avgWin": 0, "avgLoss": 0, "maxDrawdown": 0, "finalCapital": initial_capital}, "equityCurve": equity_curve, "error": "No trades were executed."}
     total_return = ((capital - initial_capital) / initial_capital) * 100
     wins = [t for t in trades if t['pnl'] > 0]; losses = [t for t in trades if t['pnl'] <= 0]
     win_rate = (len(wins) / len(trades)) * 100 if trades else 0; total_profit = sum(t['pnl'] for t in wins); total_loss = abs(sum(t['pnl'] for t in losses))
@@ -231,7 +220,7 @@ def check_all_signals():
         except Exception as e: print(f"--- ERROR processing config {config} ---"); traceback.print_exc()
 
 def process_single_config(cfg):
-    conn = get_db_connection()
+    conn = get_db_connection();
     if not conn: return
     cur = conn.cursor()
     try:
