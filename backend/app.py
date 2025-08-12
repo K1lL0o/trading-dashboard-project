@@ -138,47 +138,49 @@ def send_discord_notification(trade_details, reason, strategy_name):
 # --- ROBUST DATA CLEANING FUNCTION ---
 def clean_yfinance_data(df):
     if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
-    df = df.reset_index(); df.columns = [col.capitalize() for col in df.columns]; return df
+    df = df.reset_index()
+    df.columns = [col.lower() for col in df.columns] # Standardize to lowercase
+    return df
 
-# --- UPGRADED CORE TRADING LOGIC ---
 def generate_signals(df, strategy_name):
-    df.ta.ema(length=5, append=True); df.ta.ema(length=10, append=True); df.ta.ema(length=20, append=True); df.ta.ema(length=50, append=True)
-    df.ta.rsi(length=7, append=True); df.ta.rsi(length=14, append=True); df.ta.bbands(length=20, append=True)
-    df.ta.macd(fast=12, slow=26, signal=9, append=True)
-    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('MACD_5_12_3', 'MACDh_5_12_3', 'MACDs_5_12_3'))
+    df.ta.ema(length=5, append=True, close='close'); df.ta.ema(length=10, append=True, close='close'); df.ta.ema(length=20, append=True, close='close'); df.ta.ema(length=50, append=True, close='close')
+    df.ta.rsi(length=7, append=True, close='close'); df.ta.rsi(length=14, append=True, close='close'); df.ta.bbands(length=20, append=True, close='close')
+    df.ta.macd(fast=12, slow=26, signal=9, append=True, close='close')
+    df.ta.macd(fast=5, slow=12, signal=3, append=True, col_names=('macd_5_12_3', 'macdh_5_12_3', 'macds_5_12_3'), close='close')
+    df.columns = [col.lower() for col in df.columns]
     df['signal'] = 'STAY_OUT'
     if strategy_name == 'momentum':
-        long_conditions = ((df['RSI_14'] > 60) & (df['RSI_7'] > 65) & (df['EMA_5'] > df['EMA_10']) & (df['EMA_10'] > df['EMA_20']) & (df['EMA_20'] > df['EMA_50']) & (df['MACD_12_26_9'] > df['MACDs_12_26_9']))
-        short_conditions = ((df['RSI_14'] < 40) & (df['RSI_7'] < 35) & (df['EMA_5'] < df['EMA_10']) & (df['EMA_10'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50']) & (df['MACD_12_26_9'] < df['MACDs_12_26_9']))
+        long_conditions = ((df['rsi_14'] > 60) & (df['rsi_7'] > 65) & (df['ema_5'] > df['ema_10']) & (df['ema_10'] > df['ema_20']) & (df['ema_20'] > df['ema_50']) & (df['macd_12_26_9'] > df['macds_12_26_9']))
+        short_conditions = ((df['rsi_14'] < 40) & (df['rsi_7'] < 35) & (df['ema_5'] < df['ema_10']) & (df['ema_10'] < df['ema_20']) & (df['ema_20'] < df['ema_50']) & (df['macd_12_26_9'] < df['macds_12_26_9']))
         df.loc[long_conditions, 'signal'] = 'LONG'; df.loc[short_conditions, 'signal'] = 'SHORT'
     elif strategy_name == 'scalping':
         long_score = pd.Series(0, index=df.index); short_score = pd.Series(0, index=df.index)
-        long_score += pd.Series((df['MACD_5_12_3'] > df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) <= df['MACDs_5_12_3'].shift(1))).astype(int) * 2
-        short_score += pd.Series((df['MACD_5_12_3'] < df['MACDs_5_12_3']) & (df['MACD_5_12_3'].shift(1) >= df['MACDs_5_12_3'].shift(1))).astype(int) * 2
-        long_score += pd.Series(df['RSI_7'] < 35).astype(int); short_score += pd.Series(df['RSI_7'] > 65).astype(int)
-        long_score += pd.Series((df['EMA_5'] > df['EMA_10']) & (df['EMA_10'] > df['EMA_20'])).astype(int)
-        short_score += pd.Series((df['EMA_5'] < df['EMA_10']) & (df['EMA_10'] < df['EMA_20'])).astype(int)
+        long_score += pd.Series((df['macd_5_12_3'] > df['macds_5_12_3']) & (df['macd_5_12_3'].shift(1) <= df['macds_5_12_3'].shift(1))).astype(int) * 2
+        short_score += pd.Series((df['macd_5_12_3'] < df['macds_5_12_3']) & (df['macd_5_12_3'].shift(1) >= df['macds_5_12_3'].shift(1))).astype(int) * 2
+        long_score += pd.Series(df['rsi_7'] < 35).astype(int); short_score += pd.Series(df['rsi_7'] > 65).astype(int)
+        long_score += pd.Series((df['ema_5'] > df['ema_10']) & (df['ema_10'] > df['ema_20'])).astype(int)
+        short_score += pd.Series((df['ema_5'] < df['ema_10']) & (df['ema_10'] < df['ema_20'])).astype(int)
         df.loc[long_score >= 3, 'signal'] = 'LONG'; df.loc[short_score >= 3, 'signal'] = 'SHORT'
     return df
 
-# --- ADVANCED BACKTESTING ENGINE ---
+# --- ADVANCED BACKTESTING ENGINE (WITH CORRECTED LOWERCASE COLUMN NAMES) ---
 def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_day, atr_multiplier, target_multiplier, slippage_pips, commission_per_trade):
     trades, capital, peak_capital, max_drawdown, position, daily_trade_count, slippage, warmup_period = [], initial_capital, initial_capital, 0.0, None, {}, slippage_pips * 0.0001, 50
     equity_curve = []
     for i in range(warmup_period, len(df)):
         current, prev = df.iloc[i], df.iloc[i-1]
         current_date = current['time'].date()
-        equity_curve.append({'time': current['time'], 'capital': capital})
         if current_date not in daily_trade_count: daily_trade_count[current_date] = 0
+        equity_curve.append({'time': current['time'], 'capital': capital})
         if position:
             exit_reason, exit_price = None, 0.0
             if position['type'] == 'LONG':
-                if current['Low'] <= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss']
-                elif current['High'] >= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit']
+                if current['low'] <= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss']
+                elif current['high'] >= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit']
             elif position['type'] == 'SHORT':
-                if current['High'] >= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss']
-                elif current['Low'] <= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit']
-            if i == len(df) - 1 and not exit_reason: exit_reason, exit_price = "End of Period", current['Close']
+                if current['high'] >= position['stop_loss']: exit_reason, exit_price = "Stop Loss", position['stop_loss']
+                elif current['low'] <= position['take_profit']: exit_reason, exit_price = "Take Profit", position['take_profit']
+            if i == len(df) - 1 and not exit_reason: exit_reason, exit_price = "End of Period", current['close']
             if exit_reason:
                 exit_price += (slippage if position['type'] == 'SHORT' else -slippage)
                 pnl = (exit_price - position['entry_price']) * position['position_size'] if position['type'] == 'LONG' else (position['entry_price'] - exit_price) * position['position_size']
@@ -188,9 +190,9 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
                 position.update({'exit_price': exit_price, 'pnl': pnl, 'exit_reason': exit_reason}); trades.append(position); position = None
         if not position and prev['signal'] == 'STAY_OUT' and current['signal'] != 'STAY_OUT':
             if daily_trade_count[current_date] >= max_trades_per_day: continue
-            atr_approx = (current['High'] - current['Low']) * 0.7
+            atr_approx = (current['high'] - current['low']) * 0.7
             if pd.isna(atr_approx) or atr_approx == 0: continue
-            entry_price = current['Open'] + (slippage if current['signal'] == 'LONG' else -slippage)
+            entry_price = current['open'] + (slippage if current['signal'] == 'LONG' else -slippage)
             if current['signal'] == 'LONG':
                 stop_loss = entry_price - (atr_approx * atr_multiplier)
                 take_profit = entry_price + (atr_approx * target_multiplier)
@@ -209,18 +211,12 @@ def run_backtest_simulation(df, initial_capital, risk_per_trade, max_trades_per_
     profit_factor = total_profit / total_loss if total_loss > 0 else 999
     return {"trades": trades, "performance": {"totalReturn": round(total_return, 2), "winRate": round(win_rate, 2), "profitFactor": round(profit_factor, 2), "totalTrades": len(trades), "avgWin": round(total_profit/len(wins) if wins else 0, 2), "avgLoss": round(total_loss/len(losses) if losses else 0, 2), "maxDrawdown": round(max_drawdown*100, 2), "finalCapital": round(capital, 2)}, "equityCurve": equity_curve}
 
-# --- THE NEW DATABASE-DRIVEN WORKER LOGIC ---
-
+# --- WATCHLIST WORKER LOGIC (WITH CORRECTED LOWERCASE COLUMN NAMES) ---
 def check_all_signals():
-    """The main scheduler job. Loops through the watchlist."""
     print(f"--- Worker running. Checking {len(WATCHLIST)} configurations. ---")
     for config in WATCHLIST:
-        try:
-            process_single_config(config)
-        except Exception as e:
-            print(f"--- ERROR processing config {config} ---")
-            traceback.print_exc()
-            print("------------------------------------")
+        try: process_single_config(config)
+        except Exception as e: print(f"--- ERROR processing config {config} ---"); traceback.print_exc()
 
 def process_single_config(cfg):
     conn = get_db_connection()
@@ -229,37 +225,27 @@ def process_single_config(cfg):
     try:
         cur.execute("SELECT id, trade_type, entry_price, stop_loss, take_profit FROM live_signals WHERE status = 'active' AND symbol = %s AND strategy = %s AND timeframe = %s ORDER BY entry_date DESC LIMIT 1;", (cfg['symbol'], cfg['strategy'], cfg['timeframe']))
         active_trade_row = cur.fetchone()
-        
         data = yf.Ticker(cfg['symbol']).history(period='5d', interval=cfg['timeframe'], auto_adjust=True)
         if data.empty: return
-
-        clean_df = clean_yfinance_data(data)
-        signals_df = generate_signals(clean_df, cfg['strategy'])
+        clean_df = clean_yfinance_data(data); signals_df = generate_signals(clean_df, cfg['strategy'])
         latest, prev = signals_df.iloc[-1], signals_df.iloc[-2]
-
         if active_trade_row:
             trade_id, trade_type, entry_price, stop_loss, take_profit = active_trade_row
             exit_reason, exit_price = None, None
-            if trade_type == 'LONG' and latest['Close'] >= take_profit: exit_reason, exit_price = "Take Profit", latest['Close']
-            elif trade_type == 'LONG' and latest['Close'] <= stop_loss: exit_reason, exit_price = "Stop Loss", latest['Close']
-            elif trade_type == 'SHORT' and latest['Close'] <= take_profit: exit_reason, exit_price = "Take Profit", latest['Close']
-            elif trade_type == 'SHORT' and latest['Close'] >= stop_loss: exit_reason, exit_price = "Stop Loss", latest['Close']
+            if trade_type == 'LONG' and latest['close'] >= take_profit: exit_reason, exit_price = "Take Profit", latest['close']
+            elif trade_type == 'LONG' and latest['close'] <= stop_loss: exit_reason, exit_price = "Stop Loss", latest['close']
+            elif trade_type == 'SHORT' and latest['close'] <= take_profit: exit_reason, exit_price = "Take Profit", latest['close']
+            elif trade_type == 'SHORT' and latest['close'] >= stop_loss: exit_reason, exit_price = "Stop Loss", latest['close']
             if exit_reason:
-                cur.execute("UPDATE live_signals SET status = 'closed', exit_price = %s, exit_date = NOW(), exit_reason = %s WHERE id = %s;", (exit_price, exit_reason, trade_id))
-                conn.commit()
+                cur.execute("UPDATE live_signals SET status = 'closed', exit_price = %s, exit_date = NOW(), exit_reason = %s WHERE id = %s;", (exit_price, exit_reason, trade_id)); conn.commit()
                 send_discord_notification({"symbol": cfg['symbol'], "type": trade_type, "timeframe": cfg['timeframe'], "entry_price": entry_price, "exit_price": exit_price}, exit_reason, cfg['strategy'])
-        
         elif not active_trade_row and prev['signal'] == 'STAY_OUT' and latest['signal'] != 'STAY_OUT':
-            atr = latest['BBU_20_2.0'] - latest['BBL_20_2.0']
+            atr = latest['bbu_20_2.0'] - latest['bbl_20_2.0']
             if pd.isna(atr) or atr == 0: return
-            entry_price = latest['Close']
-            stop_loss = entry_price - atr if latest['signal'] == 'LONG' else entry_price + atr
-            take_profit = entry_price + (atr * 1.5) if latest['signal'] == 'LONG' else entry_price - (atr * 1.5)
+            entry_price = latest['close']; stop_loss = entry_price - atr if latest['signal'] == 'LONG' else entry_price + atr; take_profit = entry_price + (atr * 1.5) if latest['signal'] == 'LONG' else entry_price - (atr * 1.5)
             trade = {"symbol": cfg['symbol'], "type": latest['signal'], "timeframe": cfg['timeframe'], "entry_price": entry_price, "stop_loss": stop_loss, "take_profit": take_profit}
-            cur.execute("INSERT INTO live_signals (symbol, strategy, timeframe, status, trade_type, entry_price, stop_loss, take_profit, entry_date) VALUES (%s, %s, %s, 'active', %s, %s, %s, %s, NOW());", (cfg['symbol'], cfg['strategy'], cfg['timeframe'], latest['signal'], entry_price, stop_loss, take_profit))
-            conn.commit()
+            cur.execute("INSERT INTO live_signals (symbol, strategy, timeframe, status, trade_type, entry_price, stop_loss, take_profit, entry_date) VALUES (%s, %s, %s, 'active', %s, %s, %s, %s, NOW());", (cfg['symbol'], cfg['strategy'], cfg['timeframe'], latest['signal'], entry_price, stop_loss, take_profit)); conn.commit()
             send_discord_notification(trade, "Entry", cfg['strategy'])
-            
     except Exception as e:
         traceback.print_exc()
     finally:
