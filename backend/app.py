@@ -269,22 +269,50 @@ def get_live_signals():
 
 @app.route('/api/backtest', methods=['POST'])
 def backtest_route():
-    # (This function is unchanged and correct)
     config = request.get_json()
     try:
         ticker = yf.Ticker(config['symbol'])
         data = ticker.history(period=config['period'], interval=config['timeframe'], auto_adjust=True)
         if data.empty: return jsonify({"error": f"No data for '{config['symbol']}'."}), 404
+        
         clean_df = clean_yfinance_data(data)
         signals_df = generate_signals(clean_df, config['strategy'])
-        date_col = 'Datetime' if 'Datetime' in signals_df.columns else 'Date'
-        signals_df.rename(columns={date_col: 'time'}, inplace=True)
-        results = run_backtest_simulation(signals_df, float(config.get('initialCapital', 10000)), float(config.get('riskPerTrade', 2.0)), int(config.get('maxTradesPerDay', 5)), float(config.get('atrMultiplier', 1.0)), float(config.get('targetMultiplier', 2.5)), float(config.get('slippage', 1.5)), float(config.get('commission', 4.0)))
+        
+        # --- THIS IS THE FINAL FIX ---
+        # Robustly find the date column, whatever yfinance decided to name it.
+        date_col_name = None
+        possible_names = ['Datetime', 'Date', 'Index', 'Time']
+        for name in possible_names:
+            if name in signals_df.columns:
+                date_col_name = name
+                break
+        
+        if not date_col_name:
+            return jsonify({"error": "Could not identify the date column in the data from the API."}), 500
+
+        # Reliably rename the found date column to 'time' for the backtester.
+        signals_df.rename(columns={date_col_name: 'time'}, inplace=True)
+        # --------------------------------
+
+        results = run_backtest_simulation(
+            signals_df, 
+            float(config.get('initialCapital', 10000)),
+            float(config.get('riskPerTrade', 2.0)),
+            int(config.get('maxTradesPerDay', 5)),
+            float(config.get('atrMultiplier', 1.0)),
+            float(config.get('targetMultiplier', 2.5)),
+            float(config.get('slippage', 1.5)), 
+            float(config.get('commission', 4.0))
+        )
+        
         if "error" in results: return jsonify({ "performance": results.get('performance'), "trades": [], "chartData": [], "error": results['error'] }), 200
+        
         chart_data = signals_df.tail(300).to_dict('records')
-        return jsonify({"performance": results['performance'], "trades": results['trades'],"equityCurve": results['equityCurve'], "chartData": chart_data}), 200
+        return jsonify({"performance": results['performance'], "trades": results['trades'], "chartData": chart_data}), 200
+        
     except Exception as e:
-        traceback.print_exc(); return jsonify({"error": f"Backend error: {str(e)}"}), 500
+        traceback.print_exc()
+        return jsonify({"error": f"A critical backend error occurred: {str(e)}"}), 500
 
 @app.route('/api/get-latest-signal', methods=['GET'])
 def get_latest_signal():
