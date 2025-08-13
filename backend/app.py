@@ -333,22 +333,27 @@ def backtest_route():
 @app.route('/api/get-latest-signal', methods=['GET'])
 def get_latest_signal():
     provided_key = request.headers.get('X-API-KEY')
-    if not provided_key or provided_key != TRADING_BOT_API_KEY:
+    correct_key = os.getenv('TRADING_BOT_API_KEY')
+    if not provided_key or provided_key != correct_key:
         return jsonify({"error": "Unauthorized"}), 401
 
     conn = get_db_connection()
     if not conn: return jsonify({"error": "Database connection failed"}), 500
     
     signal = None
-    cur = conn.cursor() # Define cursor here
     try:
+        cur = conn.cursor()
+        # --- THIS IS THE CRITICAL FIX ---
+        # Get the single most recent 'active' trade, regardless of when it was opened.
+        # The bot will be responsible for checking if it's new.
         cur.execute("""
-            SELECT symbol, strategy, timeframe, trade_type, entry_price, stop_loss, take_profit, entry_date
+            SELECT id, symbol, strategy, timeframe, trade_type, entry_price, stop_loss, take_profit, entry_date
             FROM live_signals 
-            WHERE status = 'active' AND entry_date >= NOW() - INTERVAL '2 minutes'
+            WHERE status = 'active'
             ORDER BY entry_date DESC 
             LIMIT 1;
         """)
+        # ---------------------------------
         trade_data = cur.fetchone()
         if trade_data:
             columns = [desc[0] for desc in cur.description]
@@ -358,12 +363,8 @@ def get_latest_signal():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-    # --- THIS IS THE CRITICAL FIX ---
-    # The 'finally' block MUST come after the 'try/except' and before the final 'return'.
     finally:
-        if cur: cur.close()
-        if conn: conn.close()
-    # ---------------------------------
+        if conn: cur.close(); conn.close()
         
     return jsonify(signal)
 
